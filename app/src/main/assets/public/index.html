@@ -246,7 +246,7 @@
       <div class="okmsg" id="login-ok"></div>
       <button class="btn" id="btn-login">Log In</button>
       <p style="text-align:center">New here? <button class="linklike" id="link-signup">Create an account</button></p>
-      <p style="text-align:center"><button class="linklike" id="link-resend" style="display:none">Resend confirmation email</button></p>
+      <p style="text-align:center"><button class="linklike" id="link-resend" style="display:none">Resend verification code</button></p>
     </div>
     <div id="auth-signup" style="display:none">
       <input type="text" id="su-user" placeholder="Choose a username" autocomplete="username">
@@ -259,15 +259,15 @@
       <p style="text-align:center">Already have one? <button class="linklike" id="link-login">Log in</button></p>
     </div>
     <div id="auth-verify" style="display:none">
-      <p style="font-size:18px">📧 <b>Check your email!</b></p>
-      <p>We sent a confirmation link to <b id="verify-email"></b>. Tap the
-      link in the email (it opens in your browser), then come back here
-      and log in — that's how your account gets verified so you can save
-      your progress and cash out.</p>
+      <p style="font-size:18px">📧 <b>Enter your code</b></p>
+      <p>We sent a 6-digit code to <b id="verify-email"></b>. Type it below
+      to verify your email — that's how your account gets verified so you
+      can save your progress and cash out.</p>
+      <input type="text" id="verify-code" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="text-align:center;font-size:24px;letter-spacing:8px">
       <div class="err" id="verify-err"></div>
       <div class="okmsg" id="verify-ok"></div>
-      <button class="btn green" id="btn-verify-login">I've verified — Log In</button>
-      <button class="btn secondary" id="btn-verify-resend">Resend confirmation email</button>
+      <button class="btn green" id="btn-verify-code">Verify</button>
+      <button class="btn secondary" id="btn-verify-resend">Resend code</button>
       <p style="text-align:center"><button class="linklike" id="link-verify-back">Back</button></p>
     </div>
     <p class="muted" style="text-align:center">Your profile is saved on this phone only.<br>Switch accounts any time from the home screen.</p>
@@ -489,10 +489,10 @@
     nothing is lost.</p>
   </div>
   <div id="cashout-unverified" style="display:none">
-    <p>⚠️ Cashing out needs a <b>verified email</b>. Check your inbox for
-    the confirmation link we sent, tap it, then log out and log back in.
-    Your coins stay safe on this phone meanwhile.</p>
-    <button class="btn secondary" id="btn-co-resend">Resend confirmation email</button>
+    <p>⚠️ Cashing out needs a <b>verified email</b>. We sent a 6-digit code
+    to your inbox — enter it to verify. Your coins stay safe on this phone meanwhile.</p>
+    <button class="btn green" id="btn-co-entercode">Enter your code</button>
+    <button class="btn secondary" id="btn-co-resend">Resend code</button>
   </div>
   <div id="cashout-online" style="display:none">
     <p style="text-align:center">Balance: <b>🪙 <span id="co-balance">0</span></b> ≈ <b>$<span id="co-usd">0.00</span> USDT</b><br>
@@ -802,19 +802,24 @@ const SHOP_PRICES = { hammer: 100, shuffle: 200, magic: 300, life: 200 };
      MAX_BOOSTER_PER_DAY 3, MAX_LIFE_PER_DAY 3.
    The caps are enforced in the app. (The cashout caps are different:
    those are enforced by the server and cannot be bypassed.)
-   PROVIDER — this game is a plain WebView APK built WITHOUT Gradle, so
-   the normal AdMob SDK cannot be used. The provider slot is AdinPlay
-   (adinplay.com), a JavaScript rewarded-video network for HTML5 games:
-   the owner creates a publisher account, pastes the property (AIP) ID
-   into ads-config.js, and the real path is used. While the ID is empty,
-   ads run as a clearly-labelled TEST AD (5s countdown, no real ad, no
-   revenue) so the whole flow can be tested end to end. A future native
-   bridge (e.g. AdMob via a Gradle build) can plug into the same
-   showRewarded() call by setting provider "native" and exposing
-   window.NativeAds.showRewarded(onGranted, onNotGranted) — no game
-   code changes needed.
+   PROVIDERS (ads-config.js `provider`):
+     "adinplay" — a JavaScript rewarded-video network for HTML5 games.
+       The owner creates a publisher account, pastes the property (AIP)
+       ID into ads-config.js, and the real path is used. While the ID is
+       empty, ads run as a clearly-labelled TEST AD (5s countdown, no
+       real ad, no revenue) so the whole flow can be tested end to end.
+     "native" — Google AdMob via the native bridge in the Gradle-built
+       APK (MainActivity exposes window.AdMobBridge: isRewardedAdReady(),
+       showRewardedAd("moves"|"booster"|"life"), preloadRewardedAd(),
+       result via window.__onAdmobReward({rewardType, granted, error})).
+       No publisher ID is needed for this path. With Google's TEST AdMob
+       IDs it shows test ads; real revenue needs the owner's real AdMob
+       app + rewarded unit IDs (repo secrets ADMOB_APP_ID /
+       ADMOB_REWARDED_AD_UNIT_ID).
+     "none" — test-ad path (same as AdinPlay with an empty ID).
    HONEST STATUS: no real ad network is connected in this build. Test-ad
-   rewards are free until the owner fills in the publisher ID. */
+   rewards are free until the owner fills in a publisher ID (AdinPlay)
+   or real AdMob IDs (native path). */
 const ADS = {
   EXTRA_MOVES: 5,
   MAX_PER_LEVEL: 2,
@@ -829,15 +834,25 @@ const ADS_CONFIG = (window.ADS_CONFIG && typeof window.ADS_CONFIG === "object")
 const AdProvider = {
   state: "unknown", // 'test' | 'loading' | 'ready' | 'unavailable'
   _pending: null,
+  _nativePending: null,
   _testTimer: null,
   init() {
-    const id = String((ADS_CONFIG && ADS_CONFIG.publisherId) || "").trim();
-    if (!ADS_CONFIG || ADS_CONFIG.provider === "none" || !id) { this.state = "test"; return; }
+    if (!ADS_CONFIG || ADS_CONFIG.provider === "none") { this.state = "test"; return; }
     if (ADS_CONFIG.provider === "native") {
-      this.state = (window.NativeAds && typeof window.NativeAds.showRewarded === "function") ? "ready" : "unavailable";
+      // Google AdMob via the native bridge (Gradle APK). No publisher ID
+      // is needed for this path. MainActivity injects the bridge before
+      // the page loads, so it is present at init time; __onAdmobAdReady
+      // flips us to ready if it shows up late.
+      const b = window.AdMobBridge;
+      this.state = (b && typeof b.showRewardedAd === "function") ? "ready" : "unavailable";
+      try {
+        window.__onAdmobAdReady = () => { if (this.state === "unavailable") this.state = "ready"; };
+      } catch (e) { /* bridge absent — state stays "unavailable" */ }
       return;
     }
     // Real AdinPlay path (docs: adinplay.com/api).
+    const id = String((ADS_CONFIG && ADS_CONFIG.publisherId) || "").trim();
+    if (!id) { this.state = "test"; return; }
     this.state = "loading";
     try {
       window.aiptag = window.aiptag || {};
@@ -874,18 +889,10 @@ const AdProvider = {
     if (this._pending) { const r = this._pending; this._pending = null; r(result); }
   },
   // Returns a Promise resolving to 'granted' | 'not-granted' | 'unavailable'.
-  showRewarded() {
+  // kind is "moves" | "booster" | "life" (only the native path needs it).
+  showRewarded(kind) {
     if (this.state === "test") return this._showTestAd();
-    if (ADS_CONFIG.provider === "native") {
-      if (this.state !== "ready") return Promise.resolve("unavailable");
-      return new Promise((resolve) => {
-        let done = false;
-        const fin = (v) => { if (!done) { done = true; resolve(v); } };
-        try { window.NativeAds.showRewarded(() => fin("granted"), () => fin("not-granted")); }
-        catch (e) { fin("unavailable"); }
-        setTimeout(() => fin("not-granted"), 120000);
-      });
-    }
+    if (ADS_CONFIG.provider === "native") return this._showNative(kind);
     if (this.state !== "ready" || typeof window.aiptag === "undefined" || !window.aiptag.adplayer) {
       return Promise.resolve("unavailable");
     }
@@ -897,6 +904,41 @@ const AdProvider = {
         });
       } catch (e) { this._finish("not-granted"); }
       setTimeout(() => this._finish("not-granted"), 120000);
+    });
+  },
+  // Native AdMob path (Gradle APK): one showRewardedAd() call per reward,
+  // exactly one window.__onAdmobReward callback per show. Grant ONLY when
+  // granted === true. 'closed_early' / 'not_ready' / 'show_failed' all
+  // mean no reward. A second show while one is in flight is refused
+  // (the caller gets 'not-granted'); the 120s timer is only a safety net
+  // — native always calls back on grant, dismiss, or show failure.
+  _showNative(kind) {
+    const bridge = window.AdMobBridge;
+    if (!bridge || typeof bridge.showRewardedAd !== "function") return Promise.resolve("unavailable");
+    if (this._nativePending) return Promise.resolve("not-granted");
+    try {
+      if (typeof bridge.isRewardedAdReady === "function" && !bridge.isRewardedAdReady()) {
+        try { bridge.preloadRewardedAd(); } catch (e) { /* ignore */ }
+        return Promise.resolve("unavailable");
+      }
+    } catch (e) { return Promise.resolve("unavailable"); }
+    return new Promise((resolve) => {
+      let done = false;
+      const fin = (v) => {
+        if (done) return;
+        done = true;
+        this._nativePending = null;
+        resolve(v);
+      };
+      this._nativePending = fin;
+      window.__onAdmobReward = (result) => {
+        if (!this._nativePending) return; // stray callback, no show in flight
+        if (!result || result.rewardType !== kind || result.granted !== true) fin("not-granted");
+        else fin("granted");
+      };
+      try { bridge.showRewardedAd(kind); }
+      catch (e) { fin("unavailable"); }
+      setTimeout(() => fin("not-granted"), 120000);
     });
   },
   // TEST AD — clearly labelled, only used while no publisher ID is set.
@@ -953,7 +995,7 @@ async function watchAdFor(kind, onGranted, errEl) {
   if (errEl) { errEl.className = "err"; errEl.textContent = ""; }
   if (!chk.ok) { if (errEl) errEl.textContent = chk.why; return false; }
   if (errEl) errEl.textContent = "Loading ad…";
-  const res = await AdProvider.showRewarded();
+  const res = await AdProvider.showRewarded(kind);
   if (res === "granted") {
     adsRecord(kind);
     if (errEl) errEl.textContent = "";
@@ -1055,6 +1097,15 @@ async function sbResend(email){
   const res = await fetch(SB.url + "/auth/v1/resend", { method: "POST",
     headers: sbHeaders(false), body: JSON.stringify({ type: "signup", email }) });
   if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.msg || d.message || "Could not resend the email"); }
+}
+/* Verify a 6-digit signup code typed in the app (the confirmation email
+   contains the code only — no link). Returns the session on success. */
+async function sbVerifyCode(email, code){
+  const res = await fetch(SB.url + "/auth/v1/verify", { method: "POST",
+    headers: sbHeaders(false), body: JSON.stringify({ email, token: code, type: "signup" }) });
+  const data = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(data.msg || data.message || data.error_description || ("Code not accepted (" + res.status + ")"));
+  return data; // {access_token, refresh_token, user}
 }
 async function sbRestoreSession(){
   if (!SB.configured) return false;
@@ -1607,11 +1658,15 @@ function updateHUD(){
   $("g-score").textContent=G.score;
   if(!G.bonus) $("g-moves").textContent=G.moves;
   $("g-coins").textContent=data().coins;
-  $("g-progress").style.width=Math.min(100, G.score/G.cfg.target*100)+"%";
+  // G.cfg is null until the first level starts in this session (e.g. a
+  // free booster claimed from the shop on the home screen) — guard it so
+  // a grant flow can never throw here (the throw used to swallow the
+  // "Free ... added!" confirmation and leave the ad button disabled).
+  $("g-progress").style.width = G.cfg ? Math.min(100, G.score/G.cfg.target*100)+"%" : "0%";
   $("c-hammer").textContent=data().boosters.hammer;
   $("c-shuffle").textContent=data().boosters.shuffle;
   $("c-magic").textContent=(data().boosters.magic||0);
-  $("g-stars").textContent = G.score>=G.cfg.target ? "⭐".repeat(starsFor(G.score, G.cfg.target)) : "";
+  $("g-stars").textContent = (G.cfg && G.score>=G.cfg.target) ? "⭐".repeat(starsFor(G.score, G.cfg.target)) : "";
 }
 function openModal(id){ $(id).classList.add("open"); }
 function closeModal(id){ $(id).classList.remove("open"); }
@@ -1664,7 +1719,7 @@ async function openCashout(){
   $("cashout-online").style.display = "none";
   if (!SB.configured) { openModal("modal-cashout"); return; }
   if (!SB.online) {
-    // The player may just have verified in the browser — try a stored session once.
+    // The player may just have verified (entered the code) — try a stored session once.
     const restored = await sbRestoreSession();
     if (!restored || !current || current.supabaseId !== SB.userId) {
       $("cashout-unverified").style.display = "block";
@@ -1756,7 +1811,7 @@ async function doLogin(){
       // Unverified accounts still play locally — but the player must SEE
       // that verification is outstanding (cashout stays locked).
       enterHome();
-      $("home-msg").textContent = "⚠️ Your email isn't verified yet — check your inbox for the confirmation link. You can play, but cashout needs a verified email.";
+      $("home-msg").textContent = "⚠️ Your email isn't verified yet — enter the 6-digit code from your inbox (open Cash Out to enter it). You can play, but cashout needs a verified email.";
       return;
     }
     // "offline" just means the server is unreachable — play locally.
@@ -1807,8 +1862,41 @@ function showVerifyScreen(email){
   $("auth-verify").style.display="block";
   $("auth-title").textContent="Verify your email";
   $("verify-email").textContent=email;
+  $("verify-code").value="";
   $("verify-err").textContent=""; $("verify-ok").textContent="";
   showScreen("screen-auth");
+}
+/* Verify the typed 6-digit code. On success the session is stored exactly
+   like a verified login (sbSaveSession + syncFromServer) and the player
+   goes home verified. On failure the error is shown plainly and the
+   player can retry — nothing is stored, nobody is logged in. */
+async function doVerifyCode(){
+  const email = $("verify-email").textContent;
+  const code = $("verify-code").value.trim();
+  const err = $("verify-err"); err.textContent="";
+  $("verify-ok").textContent="";
+  if (!/^\d{6}$/.test(code)) { err.textContent = "Enter the 6-digit code from your email."; return; }
+  const btn = $("btn-verify-code"); btn.disabled = true;
+  try {
+    const sess = await sbVerifyCode(email, code);
+    if (!sess.user || !sess.user.email_confirmed_at) {
+      err.textContent = "That code didn't verify your email — try again or resend a new code.";
+      return;
+    }
+    sbSaveSession(sess);
+    if (current) {
+      if (current.supabaseId !== SB.userId) { current.supabaseId = SB.userId; saveCurrent(); }
+      await syncFromServer();
+      Sound.coin(); enterHome();
+    } else {
+      showAuthForm("login");
+      $("login-ok").textContent = "Email verified — log in now.";
+    }
+  } catch (e) {
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 function showAuthForm(which){
   $("auth-verify").style.display="none";
@@ -1848,18 +1936,23 @@ function init(){
   $("co-amount").addEventListener("input", updateCoAmountUsd);
   $("btn-co-resend").addEventListener("click", async ()=>{
     $("co-err").textContent=""; $("co-ok").textContent="";
-    try { await sbResend(lastLoginEmail || (current && current.email) || ""); $("co-ok").textContent="Confirmation email resent — check your inbox."; }
+    try { await sbResend(lastLoginEmail || (current && current.email) || ""); $("co-ok").textContent="New code sent — check your inbox."; }
     catch(e){ $("co-err").textContent = e.message; }
   });
-  $("btn-verify-login").addEventListener("click", ()=>{ Sound.click(); showAuthForm("login"); });
+  $("btn-co-entercode").addEventListener("click", ()=>{
+    Sound.click(); closeModal("modal-cashout");
+    showVerifyScreen((current && current.email) || lastLoginEmail || "");
+  });
+  $("btn-verify-code").addEventListener("click", ()=>{ Sound.click(); doVerifyCode(); });
+  $("verify-code").addEventListener("keydown", e=>{ if(e.key==="Enter") doVerifyCode(); });
   $("btn-verify-resend").addEventListener("click", async ()=>{
-    try { await sbResend($("verify-email").textContent); $("verify-ok").textContent="Confirmation email resent — check your inbox."; $("verify-err").textContent=""; }
+    try { await sbResend($("verify-email").textContent); $("verify-ok").textContent="New code sent — check your inbox."; $("verify-err").textContent=""; }
     catch(e){ $("verify-err").textContent = e.message; }
   });
-  $("link-verify-back").addEventListener("click", ()=>{ Sound.click(); showAuthForm("login"); });
+  $("link-verify-back").addEventListener("click", ()=>{ Sound.click(); if (current) enterHome(); else showAuthForm("login"); });
   $("link-resend").addEventListener("click", async ()=>{
     $("login-err").textContent=""; $("login-ok").textContent="";
-    try { await sbResend(lastLoginEmail); $("login-ok").textContent="Confirmation email resent — check your inbox."; $("link-resend").style.display="none"; }
+    try { await sbResend(lastLoginEmail); $("login-ok").textContent="New code sent — check your inbox."; $("link-resend").style.display="none"; }
     catch(e){ $("login-err").textContent = e.message; }
   });
   $("btn-board").addEventListener("click", ()=>{ Sound.click(); renderLeaderboard(); showScreen("screen-board"); });
@@ -1960,7 +2053,7 @@ function init(){
   const prof=sid && profiles.find(p=>p.id===sid);
   if(prof){ current=prof; enterHome(); }
   else { showAuthProfiles(); showScreen("screen-auth"); }
-  // If the player verified their email in the browser since last time, a
+  // If the player verified their email (entered the code) since last time, a
   // stored server session may exist — restore it and sync (only when the
   // local profile belongs to the same account).
   if (SB.configured) {

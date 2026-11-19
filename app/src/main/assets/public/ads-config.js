@@ -19,6 +19,6 @@
    supabase-config.js (replace the <script src="ads-config.js"> tag
    with the file contents wrapped in <script>...</script>). */
 window.ADS_CONFIG = {
-  provider: "adinplay", // 'adinplay' | 'native' (future AdMob bridge) | 'none'
-  publisherId: ""        // <-- paste the AdinPlay property (AIP) ID here
+  provider: "native", // CI APK: AdMob via window.AdMobBridge (see ADMOB_BRIDGE.md)
+  publisherId: ""        // AdinPlay ID — unused on the native path
 };

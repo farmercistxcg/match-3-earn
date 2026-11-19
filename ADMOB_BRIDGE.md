@@ -1,8 +1,10 @@
 # AdMob rewarded-ads bridge — JS ↔ native contract
 
 The native side lives in `MainActivity.java` (`AdMobBridge`, exposed to the
-game page as `window.AdMobBridge`). The game side is **not wired up yet** —
-that is the follow-up task. This doc is the contract it must follow.
+game page as `window.AdMobBridge`). The game side is WIRED UP (versionCode 9 /
+1.8): when `ads-config.js` sets `provider: "native"`, the game's
+`AdProvider.showRewarded(kind)` routes all three reward flows through this
+bridge. The AdinPlay/test path is used only when `provider` is `"adinplay"`.
 
 ## Provider switch
 

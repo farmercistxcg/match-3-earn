@@ -10,8 +10,8 @@ android {
         applicationId = "com.youcandoit2221.game"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 9
+        versionName = "1.8"
 
         // AdMob application ID. Defaults to Google's official TEST app ID
         // (shows test ads). Override with the real ID via
