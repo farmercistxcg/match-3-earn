@@ -72,16 +72,7 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
-            python3 - <<'PYEOF'
-            import os
-            cfg_path = "app/src/main/assets/public/supabase-config.js"
-            cfg = open(cfg_path).read()
-            cfg = cfg.replace("https://YOUR-PROJECT.supabase.co", os.environ["SUPABASE_URL"])
-            cfg = cfg.replace("YOUR-ANON-KEY", os.environ["SUPABASE_ANON_KEY"])
-            assert "YOUR-PROJECT" not in cfg and "YOUR-ANON-KEY" not in cfg, "placeholder left in config"
-            open(cfg_path, "w").write(cfg)
-            print("Supabase config injected from secrets")
-            PYEOF
+            python3 tools/inject_supabase_config.py
           else
             echo "::warning::SUPABASE_URL / SUPABASE_ANON_KEY not set — APK will play offline only."
           fi
