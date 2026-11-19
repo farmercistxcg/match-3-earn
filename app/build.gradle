@@ -41,10 +41,12 @@ android {
             keyPassword = project.findProperty("keyPassword") ?: "android"
             // The CI verify gate requires v2 AND v3 signatures (same profile
             // as the manual builds). AGP 8 defaults v3 off, so enable it
-            // explicitly; v2 is stated too so the profile is not left to
-            // defaults. v1 is left at its default (unneeded at minSdk 24).
+            // explicitly; the property is `enableV3Signing` in AGP 8
+            // (`v3SigningEnabled` does not exist — run 44467365454 proved it).
+            // v2 is stated too so the profile is not left to defaults.
+            // v1 is left at its default (unneeded at minSdk 24).
             v2SigningEnabled = true
-            v3SigningEnabled = true
+            enableV3Signing = true
         }
     }
 
