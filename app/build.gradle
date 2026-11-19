@@ -1,0 +1,72 @@
+plugins {
+    id("com.android.application")
+}
+
+android {
+    namespace = "com.youcandoit2221.game"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.youcandoit2221.game"
+        minSdk = 24
+        targetSdk = 36
+        versionCode = 7
+        versionName = "1.6"
+
+        // AdMob application ID. Defaults to Google's official TEST app ID
+        // (shows test ads). Override with the real ID via
+        //   ./gradlew assembleRelease -PadmobAppId=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
+        // or the ADMOB_APP_ID repo secret in CI.
+        manifestPlaceholders["admobAppId"] =
+            project.findProperty("admobAppId") ?: "ca-app-pub-3940256099942544~3347511713"
+
+        // Rewarded ad unit ID. Defaults to Google's official TEST rewarded
+        // unit (shows test ads). Override with the real ID via
+        //   -PadmobRewardedAdUnitId=ca-app-pub-XXXXXXXXXXXXXXXX/NNNNNNNNNN
+        // or the ADMOB_REWARDED_AD_UNIT_ID repo secret in CI.
+        resValue("string", "admob_rewarded_ad_unit_id",
+            project.findProperty("admobRewardedAdUnitId") as String
+                ?: "ca-app-pub-3940256099942544/5224354917")
+    }
+
+    signingConfigs {
+        // Signed with the SAME debug keystore as the manual builds, so this
+        // APK installs as an update over the existing v7/v8 on the phone.
+        // CI decodes the keystore from the KEYSTORE_BASE64 repo secret into
+        // app/debug.keystore. Passwords are the standard debug values.
+        release {
+            storeFile = file(project.findProperty("storeFile") ?: "debug.keystore")
+            storePassword = project.findProperty("storePassword") ?: "android"
+            keyAlias = project.findProperty("keyAlias") ?: "androiddebugkey"
+            keyPassword = project.findProperty("keyPassword") ?: "android"
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+            minifyEnabled = false
+            shrinkResources = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // ================================================================
+    // Google AdMob SDK — PINNED to 24.5.0. Do NOT upgrade blindly:
+    // play-services-ads 25.x pulls in androidx.appcompat:appcompat-resources
+    // (via play-services-ads-api -> com.google.android.play:hsdp),
+    // and anything AppCompat-related must NEVER ship in this app — the
+    // user's Redmi 13C refuses to launch apps containing AppCompat.
+    // Verified 2026-11-19: the full transitive tree of 24.5.0 (57
+    // artifacts, depth 3) contains NO androidx.appcompat artifact.
+    // Re-check with tools/check_admob_deps.py before any version bump,
+    // and the CI build fails if androidx/appcompat appears in the dex.
+    // ================================================================
+    implementation("com.google.android.gms:play-services-ads:24.5.0")
+}

@@ -1,0 +1,1980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Match-3 Earn — Play &amp; Earn</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; padding:0; height:100%; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: linear-gradient(180deg, #3f9bf0 0%, #7cc3f7 32%, #bfe6fb 58%, #ffe9a8 100%);
+    background-attachment: fixed;
+    color:#333; min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    user-select:none; -webkit-user-select:none; touch-action:manipulation;
+  }
+  /* Status-bar safe area: with no title bar (NoActionBar theme) the WebView
+     extends under the Android status bar, so every screen needs top padding
+     that clears it. 38px clears a standard ~24dp status bar with a small gap;
+     on notched phones env(safe-area-inset-top) adds the real inset. */
+  .screen { display:none; width:100%; max-width:480px; min-height:100vh; min-height:100dvh; padding:max(38px, calc(env(safe-area-inset-top, 0px) + 16px)) 14px 14px; flex-direction:column; align-items:center; justify-content:space-between; }
+  .screen.active { display:flex; }
+  h1 { margin:6px 0 2px; font-size:34px; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.35); letter-spacing:1px; }
+  h2 { margin:8px 0; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.35); }
+  .sub { color:#fff; opacity:.9; margin:0 0 12px; text-align:center; text-shadow:0 1px 4px rgba(0,0,0,.45); }
+  .card { background:rgba(255,255,255,.92); border-radius:18px; padding:16px; width:100%;
+    box-shadow:0 6px 20px rgba(0,0,0,.18); margin-bottom:12px; }
+  .btn { display:block; width:100%; padding:13px; margin:7px 0; border:none; border-radius:14px;
+    font-size:17px; font-weight:700; cursor:pointer; color:#fff;
+    background:linear-gradient(135deg,#ff6b9d,#ff8e53); box-shadow:0 4px 12px rgba(255,107,157,.45); }
+  .btn:active { transform:scale(.97); }
+  .btn.secondary { background:linear-gradient(135deg,#7b6cf0,#4facfe); box-shadow:0 4px 12px rgba(79,172,254,.4); }
+  .btn.green { background:linear-gradient(135deg,#43e97b,#38f9d7); box-shadow:0 4px 12px rgba(67,233,123,.4); color:#063; }
+  .btn.ghost { background:#eee; color:#444; box-shadow:none; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .btn.small { width:auto; padding:8px 14px; font-size:14px; margin:0 4px; display:inline-block; }
+  .row { display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; }
+  .pill { background:rgba(255,255,255,.92); border-radius:999px; padding:7px 13px; font-weight:700;
+    box-shadow:0 2px 8px rgba(0,0,0,.15); font-size:15px; white-space:nowrap; }
+  input[type=text], input[type=password], input[type=email] { width:100%; padding:10px; margin:5px 0; border:2px solid #ddd;
+    border-radius:12px; font-size:16px; outline:none; background:#fff; }
+  input:focus { border-color:#ff6b9d; }
+  .err { color:#d21f3c; font-weight:700; min-height:20px; font-size:14px; }
+  .okmsg { color:#0a8a3f; font-weight:700; min-height:20px; font-size:14px; }
+  .linklike { color:#ff6b9d; font-weight:700; cursor:pointer; text-decoration:underline; background:none; border:none; font-size:15px; padding:4px; }
+  /* HUD */
+  .hud { display:flex; gap:6px; width:100%; justify-content:space-between; margin:6px 0; flex-wrap:wrap; }
+  .hud .pill { font-size:14px; padding:6px 10px; }
+  .progress { width:100%; height:14px; background:rgba(255,255,255,.55); border-radius:999px; overflow:hidden; margin:4px 0 8px; }
+  .progress > div { height:100%; background:linear-gradient(90deg,#43e97b,#38f9d7); width:0%; transition:width .3s; }
+  /* Board */
+  #board { display:grid; grid-template-columns:repeat(8,1fr); gap:4px; width:100%; max-width:440px;
+    background:rgba(255,255,255,.35); padding:6px; border-radius:16px; box-shadow:0 6px 20px rgba(0,0,0,.2); }
+  .cell { aspect-ratio:1; border-radius:12px; display:flex; align-items:center; justify-content:center;
+    font-size:clamp(22px,7.2vw,34px); cursor:pointer; position:relative;
+    box-shadow:inset 0 -3px 0 rgba(0,0,0,.12), 0 2px 4px rgba(0,0,0,.12); transition:transform .08s; }
+  .cell:active { transform:scale(.93); }
+  .cell.selected { outline:3px solid #fff; outline-offset:-2px; transform:scale(1.08); z-index:2;
+    box-shadow:0 0 0 4px #ff6b9d, 0 4px 10px rgba(0,0,0,.3); }
+  .cell.hint { animation:hintpulse .7s infinite alternate; }
+  @keyframes hintpulse { from { box-shadow:0 0 0 2px #ffd93b; } to { box-shadow:0 0 0 5px #ffd93b; } }
+  .cell.pop { animation:pop .18s forwards; }
+  @keyframes pop { to { transform:scale(0); opacity:0; } }
+  .cell.drop { animation:drop .22s; }
+  @keyframes drop { from { transform:translateY(-26px); opacity:.2; } to { transform:translateY(0); opacity:1; } }
+  .cell.sparkle { animation:sparkle .45s; }
+  @keyframes sparkle { 0% { transform:scale(1); box-shadow:0 0 0 2px #fff; } 50% { transform:scale(1.18) rotate(8deg); box-shadow:0 0 14px 4px #ffd93b; } 100% { transform:scale(1); box-shadow:0 0 0 2px #ffd93b; } }
+  .t0 { background:#ffe3e8; } .t1 { background:#fff7cc; } .t2 { background:#eadcff; }
+  .t3 { background:#ffe8cc; } .t4 { background:#dcf5d8; } .t5 { background:#ffe0f2; }
+  .badge { position:absolute; top:1px; right:3px; font-size:13px; font-weight:900; color:#b3001b;
+    text-shadow:0 0 3px #fff; }
+  .cell.special { box-shadow:inset 0 0 0 3px #ffd93b, 0 2px 6px rgba(0,0,0,.25); }
+  /* Level grid */
+  .levels { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; width:100%; }
+  .lvl { background:#fff; border-radius:12px; padding:10px 0 8px; text-align:center; font-weight:800;
+    cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.15); font-size:16px; }
+  .lvl small { display:block; font-size:11px; color:#e6a817; font-weight:900; letter-spacing:1px; }
+  .lvl.locked { opacity:.45; cursor:not-allowed; }
+  .lvl.current { outline:3px solid #ff6b9d; }
+  .banner { background:#fff3cd; border-radius:12px; padding:10px 14px; font-weight:700; text-align:center;
+    margin:6px 0; width:100%; color:#7a5b00; }
+  .banner:empty { display:none; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td, th { padding:6px 4px; border-bottom:1px solid #eee; text-align:left; }
+  th { color:#888; font-size:12px; text-transform:uppercase; }
+  .shopitem { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #eee; }
+  .shopitem b { font-size:16px; } .shopitem span { color:#666; font-size:13px; display:block; }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:50; padding:16px; }
+  .modal.open { display:flex; }
+  .modal .card { max-width:420px; text-align:center; }
+  .big { font-size:44px; }
+  .muted { color:#777; font-size:13px; }
+  .avatar { width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#ff6b9d,#7b6cf0);
+    color:#fff; display:inline-flex; align-items:center; justify-content:center; font-weight:900; font-size:20px; }
+  /* ---- Match-3 Earn home screen (bright sky, chunky 3D logo) ---- */
+  .sky { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+  .in-game .sky { display:none; }
+  .cloud { position:absolute; background:#fff; border-radius:999px; opacity:.9; }
+  .cloud::before, .cloud::after { content:""; position:absolute; background:#fff; border-radius:50%; }
+  .c1 { width:120px; height:34px; top:11%; left:5%; }
+  .c1::before { width:62px; height:62px; top:-30px; left:16px; }
+  .c1::after { width:44px; height:44px; top:-20px; right:14px; }
+  .c2 { width:90px; height:28px; top:24%; right:4%; opacity:.75; }
+  .c2::before { width:46px; height:46px; top:-22px; left:12px; }
+  .c2::after { width:34px; height:34px; top:-15px; right:12px; }
+  .c3 { width:150px; height:36px; top:44%; left:-30px; opacity:.6; }
+  .c3::before { width:70px; height:70px; top:-32px; left:26px; }
+  .c3::after { width:48px; height:48px; top:-22px; right:22px; }
+  .c4 { width:100px; height:30px; top:64%; right:8%; opacity:.55; }
+  .c4::before { width:50px; height:50px; top:-24px; left:14px; }
+  .c4::after { width:36px; height:36px; top:-16px; right:12px; }
+  .screen { position:relative; z-index:1; }
+  #screen-home { min-height:100vh; }
+  .spacer { flex:1; }
+  .topbar { display:flex; justify-content:space-between; width:100%; margin-top:2px; }
+  .iconbtn { width:48px; height:48px; border-radius:50%; border:3px solid rgba(255,255,255,.95);
+    background:linear-gradient(180deg,#5aa9e6,#2f7fc4); color:#fff; font-size:22px; cursor:pointer;
+    box-shadow:0 4px 10px rgba(0,0,0,.25); position:relative; padding:0; }
+  .iconbtn:active { transform:scale(.94); }
+  .sale { position:absolute; top:-9px; right:-8px; background:#ff3b30; color:#fff; font-size:10px;
+    font-weight:900; padding:2px 7px; border-radius:999px; border:2px solid #fff; }
+  .alert-dot { position:absolute; top:-4px; right:-2px; background:#ff3b30; color:#fff; width:22px; height:22px;
+    border-radius:50%; font-size:14px; font-weight:900; display:flex; align-items:center; justify-content:center; border:2px solid #fff; }
+  .coinbar { background:rgba(20,40,90,.55); color:#fff; border-radius:999px; padding:8px 16px; font-size:19px;
+    font-weight:800; display:flex; align-items:center; gap:6px; border:2px solid rgba(255,255,255,.75); }
+  .siderow { display:flex; justify-content:space-between; width:100%; margin-top:6px; align-items:flex-start; }
+  .piggy { position:relative; background:linear-gradient(180deg,#fff,#ffe9f2); border:3px solid #fff;
+    border-radius:50%; width:68px; height:68px; font-size:38px; cursor:pointer;
+    box-shadow:0 4px 12px rgba(0,0,0,.25); padding:0; flex:none; }
+  .piggy:active { transform:scale(.94); }
+  .piggy-badge { position:absolute; top:4px; right:-8px; background:#ff4fd8; color:#fff; font-size:11px;
+    font-weight:900; padding:3px 9px; border-radius:999px; border:2px solid #fff; }
+  .piggy-under { background:rgba(20,40,90,.6); color:#fff; border-radius:999px; padding:4px 12px;
+    font-size:14px; font-weight:800; margin-top:6px; border:2px solid rgba(255,255,255,.7); display:inline-block; }
+  .timerbtn { width:64px; height:64px; font-size:30px; }
+  .logo-block { margin-top:6px; text-align:center; position:relative; width:100%; }
+  .logo-tiles { display:flex; gap:3px; justify-content:center; }
+  .tile { background:linear-gradient(180deg,#ffffff,#ffe9c2); color:#f68b1f; font-weight:900; font-size:23px;
+    padding:6px 0; width:29px; border-radius:8px; box-shadow:0 4px 0 #df7a00, 0 7px 12px rgba(0,0,0,.28);
+    text-shadow:0 1px 0 #fff; }
+  .ribbon { margin:8px auto 0; background:linear-gradient(180deg,#ff5a3c,#e63312); color:#ffd93b;
+    font-weight:900; font-size:21px; letter-spacing:7px; padding:5px 30px 5px 36px; border-radius:10px;
+    display:inline-block; transform:rotate(-2deg); box-shadow:0 4px 0 #b32400, 0 7px 14px rgba(0,0,0,.3); }
+  .logo-sub { color:#fff; font-weight:800; margin-top:6px; text-shadow:0 2px 4px rgba(0,0,0,.35); font-size:15px; }
+  .play-zone { width:100%; text-align:center; margin-top:6px; }
+  .mult-pill { background:linear-gradient(180deg,#4fc3f7,#0288d1); color:#fff; font-weight:900; padding:6px 14px;
+    border-radius:999px; border:3px solid #fff; box-shadow:0 4px 10px rgba(0,0,0,.25); font-size:17px; display:inline-block; }
+  .stardots { margin:4px 0 6px; }
+  .stardots span { width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,.65);
+    display:inline-flex; align-items:center; justify-content:center; font-weight:900; color:#999;
+    margin:0 4px; border:2px solid #fff; font-size:14px; }
+  .stardots span.on { background:#ffd93b; color:#7a5200; }
+  .bigplay { width:100%; padding:8px; font-size:29px; font-weight:900; color:#fff;
+    background:linear-gradient(180deg,#ffd93b,#ff9d00); border:none; border-radius:24px; cursor:pointer;
+    text-shadow:0 2px 0 rgba(120,60,0,.35); box-shadow:0 6px 0 #d97f00, 0 12px 20px rgba(0,0,0,.3); letter-spacing:1px; }
+  .bigplay:active { transform:translateY(4px); box-shadow:0 2px 0 #d97f00, 0 6px 12px rgba(0,0,0,.3); }
+  .play-level-label { color:#fff; font-weight:800; margin-top:6px; text-shadow:0 2px 4px rgba(0,0,0,.4); font-size:15px; }
+  .home-bottom { width:100%; margin-top:6px; display:flex; flex-direction:column; gap:8px; align-items:center; }
+  #btn-switch { margin-top:2px; margin-bottom:2px; }
+  .profile-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:center; }
+  .profile-row .pill { padding:5px 10px; font-size:14px; }
+  .profile-row .btn.small { padding:8px 10px; }
+  .avatar-btn { position:relative; background:none; border:none; cursor:pointer; padding:0; }
+  .avatar-lvl { position:absolute; bottom:-4px; right:-8px; background:#fff; color:#e63312; font-weight:900;
+    font-size:15px; border-radius:999px; padding:1px 8px; border:2px solid #e63312; }
+  .avatar-btn .avatar { width:44px; height:44px; font-size:20px; border:3px solid #fff; box-shadow:0 4px 10px rgba(0,0,0,.3); }
+  .home-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+  .hud-mini { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center; }
+  /* ---- Match-3 Earn: developer credit, globe, home scene ---- */
+  .dev-credit { color:#fff; opacity:.85; font-size:12px; font-weight:700; letter-spacing:2px; margin-top:4px; text-shadow:0 1px 3px rgba(0,0,0,.4); text-transform:uppercase; }
+  .globe-wrap { width:64px; height:64px; margin:0 auto -6px; position:relative; filter:drop-shadow(0 6px 10px rgba(0,0,0,.3)); }
+  .globe-wrap svg { width:100%; height:100%; display:block; }
+  .scene { width:100%; flex:1; min-height:36px; position:relative; margin-top:2px; }
+  .scene svg { position:absolute; inset:0; width:100%; height:100%; }
+  .bonus-btn { width:100%; padding:9px; font-size:20px; font-weight:900; color:#1b7a00; border:3px solid #fff;
+    background:linear-gradient(180deg,#ffe45c,#ffb800); border-radius:20px; cursor:pointer; margin-top:8px;
+    text-shadow:0 1px 0 #fff; box-shadow:0 5px 0 #c78d00, 0 10px 18px rgba(0,0,0,.3); }
+  .bonus-btn:active { transform:translateY(3px); box-shadow:0 2px 0 #c78d00, 0 6px 12px rgba(0,0,0,.3); }
+  .bonus-btn:disabled { opacity:.6; }
+  .bonus-badge { background:#1b7a00; color:#fff; font-size:13px; padding:3px 10px; border-radius:999px; vertical-align:middle; margin-left:6px; text-shadow:none; }
+  /* ---- Gameplay: garden scene + goal bar ---- */
+  .garden { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; display:none; }
+  .garden svg { width:100%; height:100%; display:block; }
+  .in-game .garden { display:block; }
+  .in-game { background:linear-gradient(180deg,#7cc3f7 0%,#aee3a0 55%,#7ec850 100%); }
+  #screen-game { min-height:100vh; min-height:100dvh; justify-content:space-between; }
+  .board-wrap { flex:1; display:flex; align-items:center; justify-content:center; width:100%; min-height:0; }
+  .game-bottom { width:100%; }
+  .goalbar { display:flex; align-items:center; gap:8px; width:100%; background:rgba(20,40,90,.55);
+    border:2px solid rgba(255,255,255,.7); border-radius:999px; padding:5px 8px; }
+  .goalbar .goal-level { color:#fff; font-size:21px; font-weight:900; flex:1; text-align:center; text-shadow:0 2px 4px rgba(0,0,0,.4); }
+  .goalbar .iconbtn { width:42px; height:42px; font-size:19px; border-width:2px; flex:none; }
+  .goalbar .coinbar { font-size:16px; padding:6px 12px; flex:none; }
+  .goalstrip { display:flex; align-items:center; gap:8px; width:100%; margin-top:8px; }
+  .goal-mascot { font-size:44px; line-height:1; filter:drop-shadow(0 3px 4px rgba(0,0,0,.3)); flex:none; }
+  .goal-info { flex:1; background:rgba(255,255,255,.92); border-radius:14px; padding:8px 10px; box-shadow:0 3px 10px rgba(0,0,0,.2); min-width:0; }
+  .goal-target { font-size:13px; font-weight:800; color:#333; display:flex; justify-content:space-between; gap:6px; }
+  .goal-target b { color:#e63312; }
+  .goal-progress { margin:5px 0 3px; }
+  .goal-stars { font-size:14px; min-height:18px; color:#e6a817; font-weight:900; letter-spacing:2px; }
+  .moves-pill { font-size:15px; padding:8px 10px; flex:none; }
+  #board { max-width:460px; border:3px solid rgba(255,255,255,.9); }
+  .boostbar { display:flex; gap:18px; width:100%; justify-content:center; margin-top:10px; }
+  .boostbtn { width:84px; height:84px; border-radius:50%; border:3px solid #fff; cursor:pointer;
+    font-size:15px; font-weight:900; color:#fff; position:relative; padding:0;
+    background:linear-gradient(180deg,#ff8a5c,#f96d3a);
+    box-shadow:0 5px 0 #c74a1d, 0 8px 14px rgba(0,0,0,.3); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; }
+  .boostbtn:active { transform:translateY(3px); box-shadow:0 2px 0 #c74a1d, 0 4px 8px rgba(0,0,0,.3); }
+  .boostbtn .b-ico { font-size:34px; line-height:1; }
+  .boostbtn .b-label { font-size:11px; letter-spacing:.5px; }
+  .boostbtn .b-count { position:absolute; top:-6px; right:-6px; background:#ffd93b; color:#7a5200; font-size:13px; font-weight:900;
+    min-width:26px; height:26px; border-radius:999px; border:2px solid #fff; display:flex; align-items:center; justify-content:center; padding:0 5px; }
+  .boostbtn.shuffle { background:linear-gradient(180deg,#7b6cf0,#4facfe); box-shadow:0 5px 0 #3d3a9e, 0 8px 14px rgba(0,0,0,.3); }
+  .boostbtn.magic { background:linear-gradient(180deg,#c86bff,#8e2de2); box-shadow:0 5px 0 #5e1a9e, 0 8px 14px rgba(0,0,0,.3); }
+  .hint { color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.5); text-align:center; font-size:13px; margin:8px 0 0; }
+</style>
+</head>
+<body>
+<div class="sky"><div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div><div class="cloud c4"></div></div>
+<div class="garden"><svg viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <path d="M0,540 Q100,480 200,540 T400,540 L400,800 L0,800 Z" fill="#8fd07a"/>
+  <path d="M0,600 Q120,540 240,600 T400,600 L400,800 L0,800 Z" fill="#6db85e"/>
+  <rect x="0" y="700" width="400" height="100" fill="#5da844"/>
+  <g fill="#58c96b"><circle cx="30" cy="690" r="26"/><circle cx="70" cy="700" r="20"/><circle cx="340" cy="690" r="24"/><circle cx="375" cy="705" r="18"/></g>
+  <g><rect x="18" y="470" width="10" height="60" fill="#8a5a2b"/><circle cx="23" cy="458" r="24" fill="#ff6b9d"/><circle cx="8" cy="474" r="15" fill="#ffd93b"/><circle cx="40" cy="474" r="15" fill="#7cc3f7"/></g>
+  <g><rect x="374" y="470" width="10" height="60" fill="#8a5a2b"/><circle cx="379" cy="458" r="24" fill="#ffb800"/><circle cx="364" cy="474" r="15" fill="#ff6b9d"/><circle cx="394" cy="474" r="15" fill="#58c96b"/></g>
+  <g><rect x="330" y="640" width="46" height="30" rx="6" fill="#b4762a"/><circle cx="340" cy="636" r="9" fill="#ffd93b"/><circle cx="356" cy="632" r="9" fill="#ffb800"/><circle cx="370" cy="636" r="9" fill="#ffd93b"/></g>
+  <g fill="#fff"><circle cx="90" cy="650" r="5"/><circle cx="120" cy="680" r="5"/><circle cx="290" cy="660" r="5"/><circle cx="250" cy="700" r="5"/></g>
+  <g fill="#ff6b9d"><circle cx="90" cy="650" r="2.5"/><circle cx="120" cy="680" r="2.5"/><circle cx="290" cy="660" r="2.5"/><circle cx="250" cy="700" r="2.5"/></g>
+  <g fill="#ffd93b"><circle cx="150" cy="640" r="6"/><circle cx="210" cy="670" r="6"/><circle cx="320" cy="720" r="6"/></g>
+</svg></div>
+
+<!-- ============ AUTH ============ -->
+<div class="screen" id="screen-auth">
+  <div class="logo-block" style="margin-top:14px">
+    <div class="logo-tiles"></div>
+    <div class="ribbon">EARN</div>
+  </div>
+  <p class="sub">Play &amp; Earn — match candies, win coins!</p>
+  <div class="card">
+    <h2 style="color:#333;text-shadow:none;margin-top:0" id="auth-title">Welcome back</h2>
+    <div id="auth-login">
+      <input type="text" id="login-user" placeholder="Username" autocomplete="username">
+      <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password">
+      <div class="err" id="login-err"></div>
+      <div class="okmsg" id="login-ok"></div>
+      <button class="btn" id="btn-login">Log In</button>
+      <p style="text-align:center">New here? <button class="linklike" id="link-signup">Create an account</button></p>
+      <p style="text-align:center"><button class="linklike" id="link-resend" style="display:none">Resend confirmation email</button></p>
+    </div>
+    <div id="auth-signup" style="display:none">
+      <input type="text" id="su-user" placeholder="Choose a username" autocomplete="username">
+      <input type="text" id="su-display" placeholder="Display name (optional)">
+      <input type="email" id="su-email" placeholder="Email address" autocomplete="email">
+      <input type="password" id="su-pass" placeholder="Choose a password (min 4 characters)" autocomplete="new-password">
+      <input type="password" id="su-pass2" placeholder="Repeat password" autocomplete="new-password">
+      <div class="err" id="su-err"></div>
+      <button class="btn green" id="btn-signup">Create Account</button>
+      <p style="text-align:center">Already have one? <button class="linklike" id="link-login">Log in</button></p>
+    </div>
+    <div id="auth-verify" style="display:none">
+      <p style="font-size:18px">📧 <b>Check your email!</b></p>
+      <p>We sent a confirmation link to <b id="verify-email"></b>. Tap the
+      link in the email (it opens in your browser), then come back here
+      and log in — that's how your account gets verified so you can save
+      your progress and cash out.</p>
+      <div class="err" id="verify-err"></div>
+      <div class="okmsg" id="verify-ok"></div>
+      <button class="btn green" id="btn-verify-login">I've verified — Log In</button>
+      <button class="btn secondary" id="btn-verify-resend">Resend confirmation email</button>
+      <p style="text-align:center"><button class="linklike" id="link-verify-back">Back</button></p>
+    </div>
+    <p class="muted" style="text-align:center">Your profile is saved on this phone only.<br>Switch accounts any time from the home screen.</p>
+  </div>
+  <div class="card" id="auth-profiles-card" style="display:none">
+    <b>Profiles on this phone</b>
+    <div id="auth-profiles" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- ============ HOME ============ -->
+<div class="screen" id="screen-home">
+  <div class="topbar">
+    <div class="row">
+      <button class="iconbtn" id="btn-settings" title="Settings">⚙️</button>
+      <button class="iconbtn" id="btn-map" title="Levels">🗺️</button>
+    </div>
+    <div class="row">
+      <span class="coinbar">🪙 <b id="home-coins">0</b></span>
+      <button class="iconbtn" id="btn-shop-top" title="Shop">🛒<span class="sale">Sale</span></button>
+    </div>
+  </div>
+  <div class="siderow">
+    <div style="display:flex; align-items:center; gap:6px">
+      <button class="piggy" id="btn-piggy" title="Daily bonus bank">🐷<span class="piggy-badge" id="piggy-badge">Full</span></button>
+      <span class="piggy-under"><b id="piggy-coins">0</b> 🪙</span>
+    </div>
+    <button class="iconbtn timerbtn" id="btn-daily-top" title="Daily bonus">⏰<span class="alert-dot">!</span></button>
+  </div>
+  <div class="logo-block">
+    <div class="globe-wrap">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="98" cy="20" r="9" fill="#ffd93b"/>
+        <g stroke="#ffd93b" stroke-width="2.5" stroke-linecap="round"><line x1="98" y1="6" x2="98" y2="1"/><line x1="98" y1="39" x2="98" y2="34"/><line x1="84" y1="20" x2="79" y2="20"/><line x1="117" y1="20" x2="112" y2="20"/></g>
+        <circle cx="60" cy="62" r="46" fill="#57b6f0" stroke="#fff" stroke-width="4"/>
+        <ellipse cx="48" cy="52" rx="17" ry="10" fill="#5ecf6e" transform="rotate(-18 48 52)"/>
+        <ellipse cx="76" cy="76" rx="15" ry="9" fill="#5ecf6e" transform="rotate(14 76 76)"/>
+        <circle cx="72" cy="44" r="7" fill="#5ecf6e"/>
+        <path d="M28,40 Q60,18 92,38" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".35"/>
+        <path d="M30,26 Q34,14 26,8 M30,26 Q40,16 48,14 M30,26 Q28,14 34,8" fill="none" stroke="#3d9e4d" stroke-width="3" stroke-linecap="round"/>
+        <path d="M30,26 L30,40" stroke="#8a5a2b" stroke-width="4" stroke-linecap="round"/>
+        <ellipse cx="60" cy="112" rx="34" ry="7" fill="#fff" opacity=".85"/>
+      </svg>
+    </div>
+    <div class="logo-tiles"></div>
+    <div class="ribbon">EARN</div>
+    <div class="logo-sub">🍬 Match • Win • Earn 🪙 — 10,000+ levels!</div>
+    <div class="dev-credit">by YOUCANDOIT</div>
+  </div>
+  <div class="scene">
+    <svg viewBox="0 0 400 80" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <path d="M0,46 Q80,32 170,44 T400,42 L400,80 L0,80 Z" fill="#9ed67e"/>
+      <path d="M0,54 Q120,42 240,52 T400,52 L400,80 L0,80 Z" fill="#7cc35e"/>
+      <rect x="0" y="64" width="400" height="16" fill="#f6e7c1"/>
+      <g stroke="#e3cd9a" stroke-width="2"><line x1="40" y1="64" x2="40" y2="80"/><line x1="90" y1="64" x2="90" y2="80"/><line x1="140" y1="64" x2="140" y2="80"/><line x1="190" y1="64" x2="190" y2="80"/><line x1="240" y1="64" x2="240" y2="80"/><line x1="290" y1="64" x2="290" y2="80"/><line x1="340" y1="64" x2="340" y2="80"/><line x1="0" y1="72" x2="400" y2="72"/></g>
+      <g><rect x="52" y="48" width="7" height="18" fill="#8a5a2b"/><circle cx="55" cy="40" r="11" fill="#ff6b9d"/><circle cx="45" cy="48" r="8" fill="#ffd93b"/><circle cx="66" cy="48" r="8" fill="#7cc3f7"/></g>
+      <g><rect x="341" y="48" width="7" height="18" fill="#8a5a2b"/><circle cx="344" cy="40" r="11" fill="#ffb800"/><circle cx="334" cy="48" r="8" fill="#ff6b9d"/><circle cx="356" cy="48" r="8" fill="#58c96b"/></g>
+      <rect x="172" y="60" width="56" height="4" fill="#fff"/>
+      <rect x="178" y="56" width="44" height="4" fill="#f0e2c0"/>
+      <rect x="160" y="38" width="80" height="20" fill="#fff6dd" stroke="#e8b64c" stroke-width="2"/>
+      <path d="M196,58 v-8 a4,4 0 0 1 8,0 v8 Z" fill="#b4762a"/>
+      <g fill="#7cc3f7"><rect x="168" y="43" width="9" height="10" rx="4.5"/><rect x="222" y="43" width="9" height="10" rx="4.5"/></g>
+      <rect x="188" y="20" width="24" height="20" fill="#ffe9b0" stroke="#e8b64c" stroke-width="2"/>
+      <path d="M186,22 a14,11 0 0 1 28,0 Z" fill="#ffb800" stroke="#e08a00" stroke-width="2"/>
+      <polygon points="200,6 201.5,10 206,10 202.5,13 204,17 200,14.5 196,17 197.5,13 194,10 198.5,10" fill="#ff5a3c"/>
+      <line x1="200" y1="14" x2="200" y2="4" stroke="#8a5a2b" stroke-width="2"/>
+      <polygon points="200,4 209,7 200,10" fill="#ff3b30"/>
+      <rect x="158" y="28" width="18" height="30" fill="#ffe9b0" stroke="#e8b64c" stroke-width="2"/>
+      <polygon points="155,30 179,30 167,16" fill="#ff5a3c"/>
+      <line x1="162" y1="24" x2="166" y2="30" stroke="#fff" stroke-width="2.5"/><line x1="170" y1="22" x2="174" y2="30" stroke="#fff" stroke-width="2.5"/>
+      <rect x="224" y="28" width="18" height="30" fill="#ffe9b0" stroke="#e8b64c" stroke-width="2"/>
+      <polygon points="221,30 245,30 233,16" fill="#ff5a3c"/>
+      <line x1="228" y1="24" x2="232" y2="30" stroke="#fff" stroke-width="2.5"/><line x1="236" y1="22" x2="240" y2="30" stroke="#fff" stroke-width="2.5"/>
+      <g fill="#58c96b"><circle cx="112" cy="62" r="7"/><circle cx="126" cy="64" r="5"/><circle cx="274" cy="64" r="5"/><circle cx="288" cy="62" r="7"/></g>
+      <g><rect x="308" y="54" width="30" height="12" rx="4" fill="#b4762a"/><circle cx="314" cy="52" r="5" fill="#ffd93b"/><circle cx="324" cy="50" r="5" fill="#ffb800"/><circle cx="334" cy="52" r="5" fill="#ffd93b"/></g>
+      <path d="M60,18 q5,-5 10,0 M76,14 q5,-5 10,0" stroke="#5a7a9a" stroke-width="2" fill="none" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <div class="play-zone">
+    <span class="mult-pill">⚡ Score x<span id="home-mult">1</span></span>
+    <div class="stardots"><span id="dot1">1</span><span id="dot2">2</span><span id="dot3">3</span></div>
+    <button class="bigplay" id="btn-play">▶&nbsp; Play</button>
+    <div class="play-level-label">Level <span id="play-level">1</span> • Target <span id="play-target">1200</span> points</div>
+    <button class="bonus-btn" id="btn-bonus">🎁 Bonus Level <span class="bonus-badge" id="bonus-badge">Ready!</span></button>
+  </div>
+  <div class="home-bottom">
+    <div class="profile-row">
+      <button class="avatar-btn" id="btn-profile" title="Your profile">
+        <span class="avatar" id="home-avatar">?</span><span class="avatar-lvl" id="home-level">1</span>
+      </button>
+      <span class="pill"><span id="home-name"></span> <span id="home-user"></span></span>
+      <span class="pill">❤️ <span id="home-lives">5</span><span id="home-lives-timer" class="muted"></span></span>
+      <button class="btn small ghost" id="btn-sound" title="Sound on/off">🔊</button>
+    </div>
+    <div class="home-actions">
+      <button class="btn small secondary" id="btn-levels">🗺 Levels</button>
+      <button class="btn small secondary" id="btn-board">🏆 Ranks</button>
+      <button class="btn small green" id="btn-daily">🎁 Daily +20</button>
+      <button class="btn small green" id="btn-cashout">💵 Cash Out</button>
+      <button class="btn small green" id="btn-life-ad" style="display:none">📺 +1 Life (ad)</button>
+    </div>
+    <div class="okmsg" id="home-msg"></div>
+    <p class="muted" style="margin:0">Best score: <b id="home-best">0</b> • Games won: <b id="home-won">0</b> • Coins worth ≈ $<b id="home-usd">0.00</b> USDT</p>
+  </div>
+  <button class="btn ghost" id="btn-switch">⇄ Switch account / Log out</button>
+</div>
+
+<!-- ============ LEVELS ============ -->
+<div class="screen" id="screen-levels">
+  <h2>Choose a Level</h2>
+  <div class="hud"><span class="pill">🪙 <span class="lvl-coins">0</span></span><span class="pill">❤️ <span class="lvl-lives">5</span></span></div>
+  <div class="card">
+    <div class="levels" id="level-grid"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn small secondary" id="lvl-prev">← Prev</button>
+      <span class="pill" id="lvl-page-label"></span>
+      <button class="btn small secondary" id="lvl-next">Next →</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <input type="text" id="lvl-jump" placeholder="Go to level…" style="width:130px;margin:0">
+      <button class="btn small" id="lvl-jump-btn">Go</button>
+    </div>
+  </div>
+  <button class="btn ghost" id="btn-levels-back">← Back home</button>
+</div>
+
+<!-- ============ GAME ============ -->
+<div class="screen" id="screen-game">
+  <div class="goalbar">
+    <button class="iconbtn" id="btn-back" title="Leave level">↩</button>
+    <button class="iconbtn" id="btn-game-settings" title="Sound on/off">⚙️</button>
+    <span class="goal-level">Level <span id="g-level">1</span></span>
+    <span class="coinbar">🪙 <b id="g-coins">0</b></span>
+    <button class="iconbtn" id="btn-pause-top" title="Pause">⏸</button>
+  </div>
+  <div class="goalstrip">
+    <span class="goal-mascot">🦁</span>
+    <div class="goal-info">
+      <div class="goal-target"><span>🎯 Target <b id="g-target">0</b></span><span>⭐ Score <b id="g-score">0</b></span></div>
+      <div class="progress goal-progress"><div id="g-progress"></div></div>
+      <div class="goal-stars"><span id="g-stars"></span></div>
+    </div>
+    <span class="pill moves-pill" id="g-moves-pill">👣 <span id="g-moves">30</span> moves</span>
+  </div>
+  <div class="banner" id="g-banner"></div>
+  <div class="board-wrap"><div id="board"></div></div>
+  <div class="game-bottom">
+    <div class="boostbar">
+      <button class="boostbtn" id="btn-hammer"><span class="b-ico">🔨</span><span class="b-label">Hammer</span><span class="b-count" id="c-hammer">1</span></button>
+      <button class="boostbtn magic" id="btn-magic"><span class="b-ico">✨</span><span class="b-label">Magic</span><span class="b-count" id="c-magic">1</span></button>
+      <button class="boostbtn shuffle" id="btn-shuffle"><span class="b-ico">🔀</span><span class="b-label">Shuffle</span><span class="b-count" id="c-shuffle">1</span></button>
+    </div>
+    <p class="hint">Tap a candy, then tap a neighbour to swap. Or swipe across a candy.</p>
+  </div>
+</div>
+
+<!-- ============ LEADERBOARD ============ -->
+<div class="screen" id="screen-board">
+  <h2>🏆 Leaderboard</h2>
+  <div class="card">
+    <b id="board-title">Your records</b>
+    <p class="muted" id="board-stats"></p>
+    <table><thead><tr><th>Level</th><th>Best score</th><th>Stars</th></tr></thead>
+    <tbody id="board-rows"></tbody></table>
+  </div>
+  <div class="card">
+    <b>Profiles on this phone</b>
+    <div id="board-profiles"></div>
+  </div>
+  <button class="btn ghost" id="btn-board-back">← Back home</button>
+</div>
+
+<!-- ============ MODALS ============ -->
+<div class="modal" id="modal-win"><div class="card">
+  <div class="big">🎉</div><h2 style="color:#333;text-shadow:none">Level Complete!</h2>
+  <p id="win-text"></p><p id="win-stars" style="font-size:26px"></p>
+  <button class="btn" id="btn-next">Next Level →</button>
+  <button class="btn ghost" id="btn-win-home">Home</button>
+</div></div>
+
+<div class="modal" id="modal-lose"><div class="card">
+  <div class="big">💔</div><h2 style="color:#333;text-shadow:none">Out of Moves!</h2>
+  <p id="lose-text"></p>
+  <button class="btn green" id="btn-lose-ad">📺 Watch an ad for +5 moves</button>
+  <div class="err" id="lose-err"></div>
+  <button class="btn" id="btn-retry">Try Again (❤️ 1 life)</button>
+  <button class="btn ghost" id="btn-lose-home">Home</button>
+</div></div>
+
+<div class="modal" id="modal-shop"><div class="card" style="text-align:left">
+  <h2 style="color:#333;text-shadow:none;text-align:center">🛍 Rewards Shop</h2>
+  <p style="text-align:center">Your coins: <b>🪙 <span id="shop-coins">0</span></b> (≈ $<span id="shop-usd">0.00</span> USDT)</p>
+  <div class="shopitem"><div><b>🔨 Hammer</b><span>Smash any one candy — 100 coins (2 wins)</span></div>
+    <button class="btn small" data-buy="hammer">Buy</button></div>
+  <div class="shopitem"><div><b>🔀 Shuffle</b><span>Shuffle the whole board — 200 coins (4 wins)</span></div>
+    <button class="btn small" data-buy="shuffle">Buy</button></div>
+  <div class="shopitem"><div><b>✨ Magic</b><span>Clear the most common candy — 300 coins (6 wins)</span></div>
+    <button class="btn small" data-buy="magic">Buy</button></div>
+  <div class="shopitem"><div><b>❤️ Extra Life</b><span>Restore 1 life (max 5) — 200 coins (4 wins)</span></div>
+    <button class="btn small" data-buy="life">Buy</button></div>
+  <h3 style="margin:14px 0 4px;text-align:center">🆓 Free — watch an ad</h3>
+  <p class="muted" style="text-align:center;margin:0 0 6px">Pick a booster, watch a short ad, get it free. Max 3 free boosters a day.</p>
+  <div class="row">
+    <button class="btn small secondary" data-free-booster="hammer">🔨 Hammer</button>
+    <button class="btn small secondary" data-free-booster="shuffle">🔀 Shuffle</button>
+    <button class="btn small secondary" data-free-booster="magic">✨ Magic</button>
+  </div>
+  <div class="shopitem"><div><b>📺 Free Life</b><span>Watch an ad for +1 life (max 3 a day)</span></div>
+    <button class="btn small secondary" id="btn-free-life">Watch ad</button></div>
+  <div class="err" id="shop-err"></div>
+  <button class="btn ghost" id="btn-shop-close">Close</button>
+</div></div>
+
+<div class="modal" id="modal-cashout"><div class="card" style="text-align:left">
+  <h2 style="color:#333;text-shadow:none;text-align:center">💵 Cash Out USDT</h2>
+  <div id="cashout-offline">
+    <p>⚠️ The cashout server isn't connected yet. Your coins are saved on
+    this phone and will sync once the server is set up — keep playing,
+    nothing is lost.</p>
+  </div>
+  <div id="cashout-unverified" style="display:none">
+    <p>⚠️ Cashing out needs a <b>verified email</b>. Check your inbox for
+    the confirmation link we sent, tap it, then log out and log back in.
+    Your coins stay safe on this phone meanwhile.</p>
+    <button class="btn secondary" id="btn-co-resend">Resend confirmation email</button>
+  </div>
+  <div id="cashout-online" style="display:none">
+    <p style="text-align:center">Balance: <b>🪙 <span id="co-balance">0</span></b> ≈ <b>$<span id="co-usd">0.00</span> USDT</b><br>
+    <span class="muted">20,000 coins = $1 USDT • Minimum cashout $1 (20,000 coins) • BSC (BEP20)</span></p>
+    <p class="muted" id="co-sync-note" style="text-align:center"></p>
+    <label style="font-weight:700">Your BSC wallet address (USDT BEP20)</label>
+    <input type="text" id="co-address" placeholder="0x..." autocomplete="off">
+    <label style="font-weight:700">Amount in coins</label>
+    <input type="text" id="co-amount" placeholder="20000" inputmode="numeric" autocomplete="off">
+    <div class="row"><span class="pill">≈ $<span id="co-amount-usd">0.00</span></span>
+    <button class="btn small secondary" id="co-max">Max</button></div>
+    <div class="err" id="co-err"></div>
+    <div class="okmsg" id="co-ok"></div>
+    <button class="btn green" id="btn-cashout-submit">Request Cash Out</button>
+    <h3 style="margin:14px 0 4px">Your withdrawals</h3>
+    <div id="co-history"><p class="muted">No withdrawals yet.</p></div>
+  </div>
+  <button class="btn ghost" id="btn-cashout-close">Close</button>
+</div></div>
+
+<div class="modal" id="modal-pause"><div class="card">
+  <h2 style="color:#333;text-shadow:none">Paused</h2>
+  <button class="btn" id="btn-resume">Resume</button>
+  <button class="btn secondary" id="btn-restart">Restart Level</button>
+  <button class="btn ghost" id="btn-quit">Quit Level</button>
+</div></div>
+
+<div class="modal" id="modal-leave"><div class="card">
+  <h2 style="color:#333;text-shadow:none">Leave this level?</h2>
+  <p>You'll lose a life.</p>
+  <button class="btn" id="btn-leave-yes">Leave (❤️ 1 life)</button>
+  <button class="btn ghost" id="btn-leave-no">Stay</button>
+</div></div>
+
+<!-- AdinPlay rewarded-video container (the network hides it after an ad) -->
+<div id="videoad" style="display:none"></div>
+
+<div class="modal" id="modal-testad"><div class="card">
+  <h2 style="color:#333;text-shadow:none">📺 TEST AD</h2>
+  <p class="muted">This is a <b>test ad</b> — no real ad network is connected yet,
+  so no money is earned from it. Real ads start when the owner adds an
+  AdinPlay publisher ID. Watch to the end to earn your reward.</p>
+  <div class="progress"><div id="testad-bar" style="width:0%"></div></div>
+  <p style="font-weight:700">Reward in <span id="testad-count">5</span>s…</p>
+  <button class="btn ghost" id="btn-testad-close">Close ad (no reward)</button>
+</div></div>
+
+<script>
+"use strict";
+/* ================= UTILITIES ================= */
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const TOTAL_LEVELS = 10000;
+const PAGE_SIZE = 50;
+const LIFE_MAX = 5, LIFE_REFILL_MS = 5*60*1000, DAILY_COINS = 20;
+const CANDY = ["🍓","🍋","🍇","🍊","🍏","🍬"];
+
+/* ================= LEVEL FORMULA (procedural, 10,000 levels) =================
+   Difficulty ramp (measured with a greedy-bot simulator — see
+   verify-difficulty/sim.js; the bot takes the best immediate match every
+   move, so a thinking human who plans specials can beat these numbers):
+   - L1-4 GENTLE: 30 moves, target 1200-1400 (~40-46 pts/move needed).
+     A new player wins these comfortably.
+   - From L5 the screws turn: the target jumps to 2100 at L5 (70 pts/move)
+     and the points-per-move needed keeps rising (sqrt curve, capped at
+     118), while moves fall slowly, 1 per 12 levels, floor 26.
+   - COLOURS STAY AT 6 FOREVER. Measured with the greedy bot (26 moves,
+     mult 1): mean total score is ~2,340 with 6 colours, ~4,440 with 5,
+     ~11,680 with 4. Dropping to 5 colours took the L300 bot win rate
+     from 7% to 94% at the same target, and 4 colours to 100% in ~8
+     moves — fewer colours make matching so much easier that no sane
+     target can compensate (4 colours is one long cascade, not a game).
+   - MULTIPLIER is frozen at 1x: the old formula grew it to 3x, which
+     quietly undid the difficulty (bigger scores for the same play).
+   - target = points-per-move-needed x moves, rounded to 50.
+   Measured greedy-bot win rates (200 runs/level): L1-4 100%, L5 90%,
+   L10 56%, L20 44%, L50 13%, L100 ~12%. A thinking human who plans
+   4/5-matches and cascades beats the greedy bot, so these are floors. */
+function levelConfig(n){
+  const moves = n <= 4 ? 30 : Math.max(26, 30 - Math.floor((n - 5) / 12));
+  const types = 6;
+  const mult  = 1;
+  const ppm   = n <= 4 ? 40 + 2 * (n - 1)
+                       : Math.min(112, 70 + 6 * Math.sqrt(n - 5));
+  const target = Math.round((ppm * moves) / 50) * 50;
+  return { moves, types, mult, target };
+}
+function starsFor(score, target){
+  if (score >= target*2) return 3;
+  if (score >= target*1.4) return 2;
+  return 1;
+}
+
+/* ================= SOUND (Web Audio, synthesized, no files) ================= */
+/* ================= SOUND (Web Audio, synthesized, no files) =================
+   Musical by design: soft plucks on a C-major pentatonic scale, gentle
+   envelopes, low volumes. Nothing harsh, nothing that covers the music. */
+const PENTA = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51, 1567.98, 1760.00];
+const Sound = {
+  ctx:null, master:null, musicTimer:null, musicOn:true, step:0,
+  ensure(){
+    if (!this.ctx){
+      try {
+        this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+        this.master = this.ctx.createGain(); this.master.gain.value = 0.5;
+        this.master.connect(this.ctx.destination);
+      } catch(e){ return false; }
+    }
+    if (this.ctx.state === "suspended" && !document.hidden) this.ctx.resume();
+    return true;
+  },
+  // Soft pluck: sine fundamental + quiet triangle octave, quick attack, warm decay.
+  pluck(freq, dur, vol, delay){
+    if (!this.ensure() || muted) return;
+    const t = this.ctx.currentTime + (delay||0);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol||0.12, t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    const o1 = this.ctx.createOscillator(); o1.type="sine"; o1.frequency.setValueAtTime(freq, t);
+    const o2 = this.ctx.createOscillator(); o2.type="triangle"; o2.frequency.setValueAtTime(freq*2, t);
+    const g2 = this.ctx.createGain(); g2.gain.value=0.35;
+    o1.connect(g); o2.connect(g2); g2.connect(g); g.connect(this.master);
+    o1.start(t); o2.start(t); o1.stop(t+dur+0.05); o2.stop(t+dur+0.05);
+  },
+  // Low thud: sine that drops in pitch, soft landing.
+  thud(freq, dur, vol, delay){
+    if (!this.ensure() || muted) return;
+    const t = this.ctx.currentTime + (delay||0);
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type="sine"; o.frequency.setValueAtTime(freq, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(50, freq*0.6), t+dur);
+    g.gain.setValueAtTime(vol||0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t+dur+0.05);
+  },
+  // Quick pop: sine sweeping gently upward.
+  pop(delay){
+    if (!this.ensure() || muted) return;
+    const t = this.ctx.currentTime + (delay||0);
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type="sine"; o.frequency.setValueAtTime(380, t);
+    o.frequency.exponentialRampToValueAtTime(720, t+0.09);
+    g.gain.setValueAtTime(0.07, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+0.1);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t+0.12);
+  },
+  tone(freq, dur, type, vol, delay){ this.pluck(freq, dur, vol, delay); },
+  click(){ this.pluck(1174.66, .09, .05); },
+  select(){ this.pluck(880.00, .10, .06); },
+  swap(){ this.pop(0); this.pop(0.06); },
+  invalid(){ this.thud(150, .20, .11); },
+  match(cascade){
+    const step = Math.min(6, (cascade-1)*2);
+    [0,1,2].forEach(i => this.pluck(PENTA[step+i], .34, .11, i*.07));
+  },
+  coin(){ this.pluck(1318.51, .22, .10); this.pluck(1760.00, .30, .10, .09); },
+  hammer(){ this.thud(130, .16, .13); this.pluck(523.25, .12, .05, .05); },
+  shuffleSnd(){ [0,1,2,3].forEach(i => this.pluck(PENTA[i+2], .16, .07, i*.05)); },
+  magic(){ [0,1,2,3,4].forEach(i=>this.pluck(PENTA[4+i], .25, .09, i*.05)); this.pluck(2093.00, .50, .06, .28); },
+  win(){
+    [523.25, 659.25, 783.99, 1046.50, 1318.51].forEach((f,i)=>this.pluck(f, .40, .11, i*.12));
+    [1046.50, 1318.51, 1567.98].forEach(f=>this.pluck(f, .70, .06, .62));
+  },
+  lose(){
+    [440.00, 392.00, 329.63, 261.63].forEach((f,i)=>this.pluck(f, .42, .08, i*.17));
+  },
+  startMusic(){
+    if (this.musicTimer) return;
+    // Calm and relaxing: slow, soft, gentle — long piano-like notes in a
+    // slow flowing arpeggio over peaceful chords (Cmaj7 → Am7 → Fmaj7 → G6).
+    // 32 steps, 500 ms/step -> 16 s loop; the last chord (G) resolves back
+    // to C, so the loop wraps cleanly. Volumes are low: the music sits
+    // quietly in the background and never covers the match sounds.
+    const STEP_MS = 500, STEPS = 32;
+    const N = { C3:130.81, A2:110.00, F2:87.31, G2:98.00,
+      F3:174.61, G3:196.00, A3:220.00, B3:246.94,
+      C4:261.63, D4:293.66, E4:329.63, G4:392.00, B4:493.88 };
+    // [startStep, note, lengthInSeconds] — one soft note per step, each
+    // ringing ~1.9 s so the notes overlap gently like a pad.
+    const MELODY = [
+      [0, N.C4, 1.9], [1, N.E4, 1.9], [2, N.G4, 1.9], [3, N.B4, 1.9],
+      [4, N.G4, 1.9], [5, N.B4, 1.9], [6, N.G4, 1.9], [7, N.E4, 1.9],
+      [8, N.A3, 1.9], [9, N.C4, 1.9], [10, N.E4, 1.9], [11, N.G4, 1.9],
+      [12, N.E4, 1.9], [13, N.G4, 1.9], [14, N.E4, 1.9], [15, N.C4, 1.9],
+      [16, N.F3, 1.9], [17, N.A3, 1.9], [18, N.C4, 1.9], [19, N.E4, 1.9],
+      [20, N.C4, 1.9], [21, N.E4, 1.9], [22, N.C4, 1.9], [23, N.A3, 1.9],
+      [24, N.G3, 1.9], [25, N.B3, 1.9], [26, N.D4, 1.9], [27, N.E4, 1.9],
+      [28, N.D4, 1.9], [29, N.E4, 1.9], [30, N.D4, 1.9], [31, N.B3, 1.9]
+    ];
+    const BASS = [
+      [0, N.C3, 3.8], [8, N.A2, 3.8], [16, N.F2, 3.8], [24, N.G2, 3.8]
+    ];
+    this.musicTimer = setInterval(()=>{
+      if (document.hidden || muted || !this.musicOn) return;
+      const s = this.step % STEPS;
+      for (const [st, f, len] of MELODY)
+        if (st === s) this.pluck(f, len, .03);
+      for (const [st, f, len] of BASS)
+        if (st === s) this.pluck(f, len, .035);
+      this.step++;
+    }, STEP_MS);
+  }
+};
+let muted = localStorage.getItem("sm_muted") === "1";
+function applyMute(){ $("btn-sound").textContent = muted ? "🔇" : "🔊";
+  $("btn-sound").title = muted ? "Sound off — tap to unmute" : "Sound on — tap to mute"; }
+</script>
+<!-- Supabase config (URL + anon key). In the APK this file is INLINED into
+     this page at build time (MainActivity reads only public/index.html),
+     so the game works with no extra files. In a browser it loads normally. -->
+<script src="supabase-config.js"></script>
+<script src="ads-config.js"></script>
+<script>
+/* ================= PROFILES & AUTH (on-device only) ================= */
+const STORE_KEY = "sweetmatch_profiles_v1";
+const SESSION_KEY = "sweetmatch_session_v1";
+function loadProfiles(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch(e){ return []; } }
+function saveProfiles(p){ localStorage.setItem(STORE_KEY, JSON.stringify(p)); }
+function defaultData(){
+  return { coins:100, lives:LIFE_MAX, livesUpdatedAt:Date.now(), maxUnlocked:1,
+    best:{}, stars:{}, totalBest:0, gamesPlayed:0, gamesWon:0,
+    boosters:{ hammer:1, shuffle:1, magic:1 }, lastDaily:"", lastBonus:"", totalCleared:0 };
+}
+function newProfile(username, displayName, hash, salt, email){
+  return { id:"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7),
+    username, displayName: displayName || username, email: email || "",
+    salt, hash, createdAt: Date.now(), data: defaultData() };
+}
+async function sha256hex(str){
+  if (window.crypto && crypto.subtle){
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  }
+  // Fallback (non-secure-context WebView): FNV-1a based hash, still not plain text.
+  let h1=0x811c9dc5, h2=0x01000193;
+  for (let i=0;i<str.length;i++){ h1^=str.charCodeAt(i); h1=Math.imul(h1,16777619)>>>0; h2^=str.charCodeAt(i); h2=Math.imul(h2,16777619)>>>0; }
+  return "fnv"+h1.toString(16)+h2.toString(16);
+}
+function genSalt(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+let profiles = loadProfiles();
+let current = null; // active profile object
+function getSession(){ return localStorage.getItem(SESSION_KEY); }
+function setSession(id){ if (id) localStorage.setItem(SESSION_KEY, id); else localStorage.removeItem(SESSION_KEY); }
+function saveCurrent(){ if(!current) return; const i = profiles.findIndex(p=>p.id===current.id); if(i>=0) profiles[i]=current; saveProfiles(profiles); }
+function data(){ return current.data; }
+/* Lives refill: 1 life per 5 minutes, up to max. */
+function refreshLives(){
+  const d = data(); if (!d) return;
+  if (d.lives >= LIFE_MAX){ d.livesUpdatedAt = Date.now(); return; }
+  const gained = Math.floor((Date.now() - d.livesUpdatedAt) / LIFE_REFILL_MS);
+  if (gained > 0){
+    d.lives = Math.min(LIFE_MAX, d.lives + gained);
+    d.livesUpdatedAt += gained * LIFE_REFILL_MS;
+    if (d.lives >= LIFE_MAX) d.livesUpdatedAt = Date.now();
+  }
+}
+function livesTimerText(){
+  const d = data(); if (!d || d.lives >= LIFE_MAX) return "";
+  const ms = LIFE_REFILL_MS - ((Date.now() - d.livesUpdatedAt) % LIFE_REFILL_MS);
+  const m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000);
+  return " +1 in " + m + ":" + String(s).padStart(2,"0");
+}
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function claimDaily(){
+  const d = data();
+  if (d.lastDaily === todayStr()) return false;
+  d.lastDaily = todayStr(); d.coins += DAILY_COINS; saveCurrent();
+  earnCoins(DAILY_COINS, "daily"); saveGameData();
+  return true;
+}
+
+/* ================= SUPABASE (cashout backend) =================
+   Cashout economy — mirrors the cashout_settings table in the Supabase
+   migration (cashout-server/001_cashout_schema.sql). The SERVER is
+   authoritative: the app only ever displays these values; the functions
+   enforce the caps. If you change the rate, change it in BOTH places.
+   RATE 20,000 coins = $1 USDT (BSC) • MIN cashout $1 (20,000 coins)
+   DAILY CAP $0.20/day (4,000 coins) • MAX single credit 100 coins
+   WIN +50 coins • BONUS WIN +100 • DAILY +20. Shop: Hammer 100,
+   Shuffle 200, Magic 300, Extra Life 200.
+   How it works: the phone keeps playing offline with local coins (v7
+   behaviour). When the player is logged in to a VERIFIED server account,
+   every win / daily claim / shop purchase also credits/debits the server
+   (or is queued on the phone and synced later). On verified login the
+   server balance + saved game data become the truth — except that an
+   empty server copy adopts the phone's progress once, so a player who
+   played locally and then verifies does not lose progress. Unverified
+   accounts play locally only and cannot cash out (the server enforces
+   this too — the app cannot bypass it). */
+const CASHOUT = {
+  RATE_COINS_PER_USD: 20000, MIN_CASHOUT_COINS: 20000,
+  DAILY_CAP_COINS: 4000, MAX_EVENT_COINS: 100,
+  WIN_COINS: 50, BONUS_WIN_COINS: 100, CHAIN: "BSC"
+};
+const SHOP_PRICES = { hammer: 100, shuffle: 200, magic: 300, life: 200 };
+
+/* ================= REWARDED ADS =================
+   Three rewards, all behind ONE provider call (AdProvider.showRewarded):
+     1. EXTRA MOVES — out of moves: +5 moves, keep playing the same level.
+     2. FREE BOOSTER — pick Hammer / Shuffle / Magic, get one free.
+     3. EXTRA LIFE — out of lives: +1 life instead of waiting to refill.
+   Anti-farm limits (per player, stored in the profile, synced with the
+   rest of the game data when the account is verified):
+     MAX_PER_LEVEL 2 — extra-moves ads per level attempt (+10 moves max)
+     MAX_PER_DAY 10 — all rewarded ads per day, all kinds together
+     MAX_BOOSTER_PER_DAY 3, MAX_LIFE_PER_DAY 3.
+   The caps are enforced in the app. (The cashout caps are different:
+   those are enforced by the server and cannot be bypassed.)
+   PROVIDER — this game is a plain WebView APK built WITHOUT Gradle, so
+   the normal AdMob SDK cannot be used. The provider slot is AdinPlay
+   (adinplay.com), a JavaScript rewarded-video network for HTML5 games:
+   the owner creates a publisher account, pastes the property (AIP) ID
+   into ads-config.js, and the real path is used. While the ID is empty,
+   ads run as a clearly-labelled TEST AD (5s countdown, no real ad, no
+   revenue) so the whole flow can be tested end to end. A future native
+   bridge (e.g. AdMob via a Gradle build) can plug into the same
+   showRewarded() call by setting provider "native" and exposing
+   window.NativeAds.showRewarded(onGranted, onNotGranted) — no game
+   code changes needed.
+   HONEST STATUS: no real ad network is connected in this build. Test-ad
+   rewards are free until the owner fills in the publisher ID. */
+const ADS = {
+  EXTRA_MOVES: 5,
+  MAX_PER_LEVEL: 2,
+  MAX_PER_DAY: 10,
+  MAX_BOOSTER_PER_DAY: 3,
+  MAX_LIFE_PER_DAY: 3,
+  TEST_AD_SECONDS: 5
+};
+const ADS_CONFIG = (window.ADS_CONFIG && typeof window.ADS_CONFIG === "object")
+  ? window.ADS_CONFIG : { provider: "adinplay", publisherId: "" };
+
+const AdProvider = {
+  state: "unknown", // 'test' | 'loading' | 'ready' | 'unavailable'
+  _pending: null,
+  _testTimer: null,
+  init() {
+    const id = String((ADS_CONFIG && ADS_CONFIG.publisherId) || "").trim();
+    if (!ADS_CONFIG || ADS_CONFIG.provider === "none" || !id) { this.state = "test"; return; }
+    if (ADS_CONFIG.provider === "native") {
+      this.state = (window.NativeAds && typeof window.NativeAds.showRewarded === "function") ? "ready" : "unavailable";
+      return;
+    }
+    // Real AdinPlay path (docs: adinplay.com/api).
+    this.state = "loading";
+    try {
+      window.aiptag = window.aiptag || {};
+      window.aiptag.cmd = window.aiptag.cmd || [];
+      window.aiptag.cmd.display = window.aiptag.cmd.display || [];
+      window.aiptag.cmd.player = window.aiptag.cmd.player || [];
+      window.aiptag.cmp = { show: false };
+      const s = document.createElement("script");
+      s.async = true;
+      s.src = "https://api.adinplay.com/libs/aiptag/pub/" + encodeURIComponent(id) + "/tag.min.js";
+      s.onload = () => this._setupPlayer();
+      s.onerror = () => { this.state = "unavailable"; };
+      document.head.appendChild(s);
+      setTimeout(() => { if (this.state === "loading") this.state = "unavailable"; }, 15000);
+    } catch (e) { this.state = "unavailable"; }
+  },
+  _setupPlayer() {
+    try {
+      const self = this;
+      window.aiptag.cmd.player.push(function () {
+        window.aiptag.adplayer = new aipPlayer({
+          AD_WIDTH: 960, AD_HEIGHT: 540, AD_DISPLAY: "fullscreen",
+          LOADING_TEXT: "loading advertisement",
+          PREROLL_ELEM: function () { return document.getElementById("videoad"); },
+          AIP_REWARDEDGRANTED: function () { self._finish("granted"); },
+          AIP_REWARDEDNOTGRANTED: function () { self._finish("not-granted"); },
+          AIP_COMPLETE: function () { /* AdinPlay hides the container itself */ }
+        });
+        self.state = "ready";
+      });
+    } catch (e) { this.state = "unavailable"; }
+  },
+  _finish(result) {
+    if (this._pending) { const r = this._pending; this._pending = null; r(result); }
+  },
+  // Returns a Promise resolving to 'granted' | 'not-granted' | 'unavailable'.
+  showRewarded() {
+    if (this.state === "test") return this._showTestAd();
+    if (ADS_CONFIG.provider === "native") {
+      if (this.state !== "ready") return Promise.resolve("unavailable");
+      return new Promise((resolve) => {
+        let done = false;
+        const fin = (v) => { if (!done) { done = true; resolve(v); } };
+        try { window.NativeAds.showRewarded(() => fin("granted"), () => fin("not-granted")); }
+        catch (e) { fin("unavailable"); }
+        setTimeout(() => fin("not-granted"), 120000);
+      });
+    }
+    if (this.state !== "ready" || typeof window.aiptag === "undefined" || !window.aiptag.adplayer) {
+      return Promise.resolve("unavailable");
+    }
+    return new Promise((resolve) => {
+      this._pending = resolve;
+      try {
+        window.aiptag.cmd.player.push(function () {
+          window.aiptag.adplayer.startRewardedAd({ preload: false, showLoading: true });
+        });
+      } catch (e) { this._finish("not-granted"); }
+      setTimeout(() => this._finish("not-granted"), 120000);
+    });
+  },
+  // TEST AD — clearly labelled, only used while no publisher ID is set.
+  _showTestAd() {
+    return new Promise((resolve) => {
+      const total = ADS.TEST_AD_SECONDS;
+      let left = total;
+      const bar = $("testad-bar"), count = $("testad-count");
+      if (bar) bar.style.width = "0%";
+      if (count) count.textContent = String(left);
+      openModal("modal-testad");
+      const done = (result) => {
+        if (this._testTimer) { clearInterval(this._testTimer); this._testTimer = null; }
+        closeModal("modal-testad");
+        resolve(result);
+      };
+      $("btn-testad-close").onclick = () => done("not-granted");
+      this._testTimer = setInterval(() => {
+        left--;
+        if (bar) bar.style.width = Math.round((total - left) / total * 100) + "%";
+        if (count) count.textContent = String(Math.max(0, left));
+        if (left <= 0) done("granted");
+      }, 1000);
+    });
+  }
+};
+
+// Per-day ad counters, stored in the profile (synced server-side when verified).
+function adsToday() {
+  const d = data();
+  if (!d.ads || d.ads.day !== todayStr()) d.ads = { day: todayStr(), total: 0, booster: 0, life: 0 };
+  return d.ads;
+}
+function adsCan(kind) {
+  const a = adsToday();
+  if (a.total >= ADS.MAX_PER_DAY) return { ok: false, why: "Daily ad limit reached — come back tomorrow." };
+  if (kind === "moves" && (G.adsMovesUsed || 0) >= ADS.MAX_PER_LEVEL) return { ok: false, why: "No more extra moves for this level." };
+  if (kind === "booster" && a.booster >= ADS.MAX_BOOSTER_PER_DAY) return { ok: false, why: "Free booster limit reached for today." };
+  if (kind === "life" && a.life >= ADS.MAX_LIFE_PER_DAY) return { ok: false, why: "Free life limit reached for today." };
+  return { ok: true };
+}
+function adsRecord(kind) {
+  const a = adsToday();
+  a.total++;
+  if (kind === "booster") a.booster++;
+  if (kind === "life") a.life++;
+  if (kind === "moves") G.adsMovesUsed = (G.adsMovesUsed || 0) + 1;
+  saveCurrent(); saveGameData();
+}
+// Show an ad for a reward. onGranted() runs ONLY after the ad completes.
+// Returns true when the reward was granted. errEl (optional) shows why not.
+async function watchAdFor(kind, onGranted, errEl) {
+  const chk = adsCan(kind);
+  if (errEl) { errEl.className = "err"; errEl.textContent = ""; }
+  if (!chk.ok) { if (errEl) errEl.textContent = chk.why; return false; }
+  if (errEl) errEl.textContent = "Loading ad…";
+  const res = await AdProvider.showRewarded();
+  if (res === "granted") {
+    adsRecord(kind);
+    if (errEl) errEl.textContent = "";
+    onGranted();
+    return true;
+  }
+  if (errEl) errEl.textContent = res === "not-granted"
+    ? "Ad didn't finish — no reward this time."
+    : "Ads aren't available right now — check your connection and try again.";
+  return false;
+}
+function grantFreeBooster(kind) {
+  const d = data();
+  d.boosters[kind] = (d.boosters[kind] || 0) + 1;
+  saveCurrent(); saveGameData(); updateHUD();
+  const err = $("shop-err");
+  if (err) {
+    err.className = "okmsg"; err.textContent = "Free " + kind + " added! ✓";
+    setTimeout(() => { err.textContent = ""; err.className = "err"; }, 2000);
+  }
+  Sound.coin();
+}
+function grantExtraLife() {
+  const d = data();
+  refreshLives();
+  d.lives = Math.min(LIFE_MAX, d.lives + 1);
+  saveCurrent(); saveGameData(); syncHome();
+  const msg = $("home-msg");
+  if (msg) { msg.className = "okmsg"; msg.textContent = "+1 life! ❤️"; }
+  Sound.coin();
+}
+function refreshLoseAdButton() {
+  const btn = $("btn-lose-ad");
+  if (!btn) return;
+  const chk = adsCan("moves");
+  btn.disabled = !chk.ok;
+  btn.textContent = chk.ok ? "📺 Watch an ad for +5 moves" : "📺 +5 moves — limit reached";
+}
+const SB_CFG = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url &&
+  window.SUPABASE_CONFIG.url.indexOf("YOUR-PROJECT") === -1 &&
+  window.SUPABASE_CONFIG.anonKey &&
+  window.SUPABASE_CONFIG.anonKey.indexOf("YOUR-ANON-KEY") === -1)
+  ? window.SUPABASE_CONFIG : null;
+const SB = {
+  configured: !!SB_CFG,
+  url: SB_CFG ? SB_CFG.url.replace(/\/$/, "") : "",
+  anonKey: SB_CFG ? SB_CFG.anonKey : "",
+  accessToken: null, refreshToken: null, userId: null, email: null,
+  verified: false, online: false, syncing: false
+};
+const SB_SESSION_KEY = "sm_sb_session_v1";
+const SB_PENDING_KEY = "sm_sb_pending_v1";
+const BSC_ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
+let lastLoginEmail = "";
+
+function sbHeaders(withAuth){
+  const h = { "apikey": SB.anonKey, "Content-Type": "application/json" };
+  if (withAuth && SB.accessToken) h["Authorization"] = "Bearer " + SB.accessToken;
+  return h;
+}
+function sbSaveSession(sess){
+  SB.accessToken = sess.access_token || null;
+  SB.refreshToken = sess.refresh_token || null;
+  SB.userId = (sess.user && sess.user.id) || null;
+  SB.email = (sess.user && sess.user.email) || null;
+  SB.verified = !!(sess.user && sess.user.email_confirmed_at);
+  SB.online = !!(SB.accessToken && SB.userId && SB.verified);
+  if (SB.accessToken) {
+    try { localStorage.setItem(SB_SESSION_KEY, JSON.stringify({
+      access_token: SB.accessToken, refresh_token: SB.refreshToken,
+      user_id: SB.userId, email: SB.email })); } catch(e){}
+  }
+}
+function sbClearSession(){
+  SB.accessToken = SB.refreshToken = SB.userId = SB.email = null;
+  SB.verified = false; SB.online = false;
+  try { localStorage.removeItem(SB_SESSION_KEY); } catch(e){}
+}
+async function sbSignup(email, password, username, displayName){
+  const res = await fetch(SB.url + "/auth/v1/signup", { method: "POST",
+    headers: sbHeaders(false),
+    body: JSON.stringify({ email, password, data: { username, display_name: displayName } }) });
+  const data = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(data.msg || data.message || ("Sign-up failed (" + res.status + ")"));
+  return data; // {user, session} — session is null until the email is confirmed
+}
+async function sbLogin(email, password){
+  const res = await fetch(SB.url + "/auth/v1/token?grant_type=password", { method: "POST",
+    headers: sbHeaders(false), body: JSON.stringify({ email, password }) });
+  const data = await res.json().catch(()=>({}));
+  if (!res.ok) {
+    const m = String(data.msg || data.message || data.error_description || "");
+    if (/email not confirmed/i.test(m)) { const e = new Error("EMAIL_NOT_CONFIRMED"); e.code = "EMAIL_NOT_CONFIRMED"; throw e; }
+    throw new Error(m || ("Login failed (" + res.status + ")"));
+  }
+  return data; // {access_token, refresh_token, user}
+}
+async function sbResend(email){
+  const res = await fetch(SB.url + "/auth/v1/resend", { method: "POST",
+    headers: sbHeaders(false), body: JSON.stringify({ type: "signup", email }) });
+  if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.msg || d.message || "Could not resend the email"); }
+}
+async function sbRestoreSession(){
+  if (!SB.configured) return false;
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(SB_SESSION_KEY) || "null"); } catch(e){ saved = null; }
+  if (!saved || !saved.refresh_token) return false;
+  try {
+    const res = await fetch(SB.url + "/auth/v1/token?grant_type=refresh_token", { method: "POST",
+      headers: sbHeaders(false), body: JSON.stringify({ refresh_token: saved.refresh_token }) });
+    if (!res.ok) throw new Error("refresh failed");
+    sbSaveSession(await res.json());
+    return SB.online;
+  } catch(e){ sbClearSession(); return false; }
+}
+async function sbRpc(fn, body){
+  const res = await fetch(SB.url + "/rest/v1/rpc/" + fn, { method: "POST",
+    headers: sbHeaders(true), body: JSON.stringify(body) });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok) {
+    const m = (data && (data.message || data.msg)) || ("Server error " + res.status);
+    const e = new Error(m); e.status = res.status; throw e;
+  }
+  return Array.isArray(data) ? data[0] : data;
+}
+async function sbGetProfile(){
+  const res = await fetch(SB.url + "/rest/v1/profiles?id=eq." + SB.userId +
+    "&select=coins_balance,total_earned,total_cashed_out,game_data", { headers: sbHeaders(true) });
+  if (!res.ok) throw new Error("Could not load profile (" + res.status + ")");
+  const rows = await res.json();
+  return rows[0] || null;
+}
+async function sbGetWithdrawals(){
+  const res = await fetch(SB.url + "/rest/v1/withdrawals?user_id=eq." + SB.userId +
+    "&select=id,usdt_address,coins,usd_amount,status,requested_at,tx_hash&order=requested_at.desc&limit=20",
+    { headers: sbHeaders(true) });
+  if (!res.ok) throw new Error("Could not load withdrawals (" + res.status + ")");
+  return await res.json();
+}
+/* Pending queue: server credits/debits earned while offline (or while the
+   account is unverified) wait here and sync when the player is back online
+   and verified. Entries are processed in order; a server rejection (e.g.
+   daily cap) drops that entry, a network failure stops the flush. */
+function loadPending(){ try { return JSON.parse(localStorage.getItem(SB_PENDING_KEY)) || []; } catch(e){ return []; } }
+function savePending(q){ try { localStorage.setItem(SB_PENDING_KEY, JSON.stringify(q)); } catch(e){} }
+function queuePending(entry){
+  const q = loadPending();
+  q.push(entry);
+  if (q.length > 500) q.splice(0, q.length - 500);
+  savePending(q);
+}
+async function flushPending(){
+  if (!SB.online || SB.syncing) return;
+  SB.syncing = true;
+  try {
+    let q = loadPending();
+    while (q.length) {
+      const e = q[0];
+      try {
+        let r = null;
+        if (e.kind === "credit") r = await sbRpc("credit_coins", { p_user: SB.userId, p_coins: e.coins, p_ref: e.ref });
+        else if (e.kind === "debit") r = await sbRpc("debit_coins", { p_user: SB.userId, p_coins: e.coins, p_ref: e.ref });
+        if (r && typeof r.balance === "number") { data().coins = r.balance; saveCurrent(); }
+        q.shift(); savePending(q);
+      } catch (err) {
+        if (err.status && err.status >= 400 && err.status < 500) { q.shift(); savePending(q); }
+        else break; // network problem — stop, retry later
+      }
+    }
+  } finally { SB.syncing = false; }
+}
+/* Earn coins server-side (win / daily). Local coins were already added by
+   the caller; this mirrors the same amount to the server (or queues it). */
+function earnCoins(coins, ref){
+  if (!SB.online) { queuePending({ kind: "credit", coins, ref }); return; }
+  sbRpc("credit_coins", { p_user: SB.userId, p_coins: coins, p_ref: ref })
+    .then(r => { if (r && typeof r.balance === "number") { data().coins = r.balance; saveCurrent(); syncHome(); } })
+    .catch(() => queuePending({ kind: "credit", coins, ref }));
+}
+/* Spend coins server-side (shop purchase). Local coins were already spent. */
+function spendServer(coins, ref){
+  if (!SB.online) { queuePending({ kind: "debit", coins, ref }); return; }
+  sbRpc("debit_coins", { p_user: SB.userId, p_coins: coins, p_ref: ref })
+    .then(r => { if (r && typeof r.balance === "number") { data().coins = r.balance; saveCurrent(); syncHome(); } })
+    .catch(() => queuePending({ kind: "debit", coins, ref }));
+}
+function gameDataForServer(){
+  const d = data();
+  return { maxUnlocked: d.maxUnlocked, best: d.best, stars: d.stars, totalBest: d.totalBest,
+    gamesPlayed: d.gamesPlayed, gamesWon: d.gamesWon, boosters: d.boosters, lives: d.lives,
+    livesUpdatedAt: d.livesUpdatedAt, lastDaily: d.lastDaily, lastBonus: d.lastBonus,
+    totalCleared: d.totalCleared, ads: d.ads || { day: "", total: 0, booster: 0, life: 0 } };
+}
+function applyServerGameData(gd){
+  if (!gd || typeof gd !== "object" || Array.isArray(gd)) return false;
+  const d = data();
+  const num = (v, fb) => (typeof v === "number" && isFinite(v) ? v : fb);
+  d.maxUnlocked = Math.max(1, Math.min(TOTAL_LEVELS, num(gd.maxUnlocked, d.maxUnlocked)));
+  if (gd.best && typeof gd.best === "object") d.best = gd.best;
+  if (gd.stars && typeof gd.stars === "object") d.stars = gd.stars;
+  d.totalBest = num(gd.totalBest, d.totalBest);
+  d.gamesPlayed = num(gd.gamesPlayed, d.gamesPlayed);
+  d.gamesWon = num(gd.gamesWon, d.gamesWon);
+  if (gd.boosters && typeof gd.boosters === "object") {
+    d.boosters = { hammer: num(gd.boosters.hammer, 1), shuffle: num(gd.boosters.shuffle, 1), magic: num(gd.boosters.magic, 1) };
+  }
+  d.lives = Math.max(0, Math.min(LIFE_MAX, num(gd.lives, d.lives)));
+  d.livesUpdatedAt = num(gd.livesUpdatedAt, d.livesUpdatedAt);
+  if (typeof gd.lastDaily === "string") d.lastDaily = gd.lastDaily;
+  if (typeof gd.lastBonus === "string") d.lastBonus = gd.lastBonus;
+  d.totalCleared = num(gd.totalCleared, d.totalCleared);
+  if (gd.ads && typeof gd.ads === "object") {
+    const a = gd.ads;
+    d.ads = { day: typeof a.day === "string" ? a.day : "", total: num(a.total, 0), booster: num(a.booster, 0), life: num(a.life, 0) };
+  }
+  return true;
+}
+function localHasProgress(){
+  const d = data();
+  return d.maxUnlocked > 1 || d.gamesPlayed > 0 || d.totalCleared > 0 || d.coins > 100;
+}
+async function saveGameData(){
+  if (!SB.online) return;
+  try {
+    const r = await sbRpc("save_game_data", { p_user: SB.userId, p_data: gameDataForServer() });
+    if (r && typeof r.balance === "number") { data().coins = r.balance; saveCurrent(); }
+  } catch(e){ /* offline — the local copy is safe; it syncs on next login */ }
+}
+/* Verified login sync: flush the queue, load the server profile + game
+   data, adopt local progress if the server copy is empty, migrate any
+   local coins the server doesn't know about (v7-era / unverified play),
+   then take the server balance as the truth. Returns true on success. */
+async function syncFromServer(){
+  if (!SB.online) return false;
+  try {
+    await flushPending();
+    const prof = await sbGetProfile();
+    if (!prof) return false;
+    const serverGD = prof.game_data || {};
+    const serverEmpty = !serverGD || Object.keys(serverGD).length === 0;
+    if (serverEmpty && localHasProgress()) {
+      await saveGameData();
+    } else if (!serverEmpty) {
+      applyServerGameData(serverGD);
+    }
+    if (data().coins > (prof.coins_balance || 0)) {
+      let diff = data().coins - (prof.coins_balance || 0);
+      while (diff > 0) { const c = Math.min(CASHOUT.MAX_EVENT_COINS, diff); queuePending({ kind: "credit", coins: c, ref: "migrate:local" }); diff -= c; }
+      await flushPending();
+      const prof2 = await sbGetProfile();
+      if (prof2) data().coins = prof2.coins_balance || 0;
+    } else {
+      data().coins = prof.coins_balance || 0;
+    }
+    saveCurrent(); syncHome();
+    return true;
+  } catch(e){ return false; }
+}
+/* Link the local profile to its server account at login time.
+   Returns "online" | "unverified" | "offline". */
+async function linkServerAccount(prof, password){
+  try {
+    const sess = await sbLogin(prof.email, password);
+    sbSaveSession(sess);
+    if (prof.supabaseId !== SB.userId) { prof.supabaseId = SB.userId; saveCurrent(); }
+    await syncFromServer();
+    return "online";
+  } catch (e) {
+    if (e.code === "EMAIL_NOT_CONFIRMED") return "unverified";
+    try {
+      const res = await sbSignup(prof.email, password, prof.username, prof.displayName);
+      if (res.session) {
+        sbSaveSession(res.session);
+        if (prof.supabaseId !== SB.userId) { prof.supabaseId = SB.userId; saveCurrent(); }
+        await syncFromServer();
+        return "online";
+      }
+      return "unverified"; // account created — confirmation email sent
+    } catch (e2) {
+      return "offline"; // server unreachable (or account exists with another password)
+    }
+  }
+}
+
+/* ================= GAME STATE ================= */
+const G = {
+  level:1, cfg:null, board:[], score:0, moves:0, selected:null,
+  busy:false, over:false, hammerMode:false, cascade:0, earned:0,
+  bonus:false, bonusTime:0, bonusTimer:null, gen:0,
+  lifeLost:false, adsMovesUsed:0
+};
+function showScreen(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  $(id).classList.add("active");
+  document.body.classList.toggle("in-game", id==="screen-game");
+  window.scrollTo(0,0);
+}
+function syncHome(){
+  refreshLives();
+  if(data().boosters.magic==null) data().boosters.magic=1;
+  saveCurrent();
+  const d = data();
+  $("home-avatar").textContent = (d && current) ? (current.displayName||"?").slice(0,1).toUpperCase() : "?";
+  $("home-name").textContent = current ? current.displayName : "";
+  $("home-user").textContent = current ? "@"+current.username : "";
+  $("home-coins").textContent = d.coins;
+  $("home-usd").textContent = (d.coins / CASHOUT.RATE_COINS_PER_USD).toFixed(2);
+  $("home-lives").textContent = d.lives;
+  $("home-lives-timer").textContent = livesTimerText();
+  const lifeAd = $("btn-life-ad");
+  if (lifeAd) lifeAd.style.display = d.lives <= 0 ? "" : "none";
+  $("home-level").textContent = d.maxUnlocked;
+  $("play-level").textContent = d.maxUnlocked;
+  $("home-best").textContent = d.totalBest;
+  $("home-won").textContent = d.gamesWon;
+  const pc = $("piggy-coins"); if (pc) pc.textContent = d.coins;
+  const pb = $("piggy-badge");
+  if (pb){ const ready = d.lastDaily !== todayStr(); pb.textContent = ready ? "Full" : "Done"; pb.style.background = ready ? "#ff4fd8" : "#999"; }
+  const cfg = levelConfig(d.maxUnlocked);
+  const bb=$("bonus-badge"), btnB=$("btn-bonus");
+  if(bb && btnB){ const ready=d.lastBonus!==todayStr(); bb.textContent=ready?"Ready!":"Done ✓"; btnB.disabled=!ready; }
+  const hm = $("home-mult"); if (hm) hm.textContent = Math.round(cfg.mult*10)/10;
+  const pt = $("play-target"); if (pt) pt.textContent = cfg.target;
+  const st = d.stars[d.maxUnlocked] || 0;
+  ["dot1","dot2","dot3"].forEach((id,i)=>{ const el=$(id); if(el) el.classList.toggle("on", i<st); });
+  document.querySelectorAll(".lvl-coins").forEach(e=>e.textContent=d.coins);
+  document.querySelectorAll(".lvl-lives").forEach(e=>e.textContent=d.lives);
+}
+function banner(msg, ms){
+  $("g-banner").textContent = msg;
+  if (ms) setTimeout(()=>{ if($("g-banner").textContent===msg) $("g-banner").textContent=""; }, ms);
+}
+
+/* ================= BOARD ENGINE ================= */
+function randType(n){ return Math.floor(Math.random()*n); }
+function newBoard(types){
+  const b=[];
+  for(let r=0;r<8;r++){ b.push([]);
+    for(let c=0;c<8;c++){
+      let t;
+      do { t=randType(types); }
+      while ((c>=2 && b[r][c-1].t===t && b[r][c-2].t===t) ||
+             (r>=2 && b[r-1][c].t===t && b[r-2][c].t===t));
+      b[r].push({t:t, s:null});
+    }
+  }
+  return b;
+}
+function findMatches(){
+  const groups=[];
+  for(let r=0;r<8;r++){ let c=0;
+    while(c<8){ const t=G.board[r][c].t; let len=1;
+      while(c+len<8 && G.board[r][c+len].t===t) len++;
+      if(len>=3){ const cells=[]; for(let i=0;i<len;i++) cells.push({r:r,c:c+i});
+        groups.push({cells:cells, dir:"row", len:len}); }
+      c+=len; } }
+  for(let c=0;c<8;c++){ let r=0;
+    while(r<8){ const t=G.board[r][c].t; let len=1;
+      while(r+len<8 && G.board[r+len][c].t===t) len++;
+      if(len>=3){ const cells=[]; for(let i=0;i<len;i++) cells.push({r:r+i,c:c});
+        groups.push({cells:cells, dir:"col", len:len}); }
+      r+=len; } }
+  return groups;
+}
+function cellsToClear(groups){
+  const clear=new Map(), specials=[];
+  groups.forEach(g=>{
+    let anchor=g.cells[0];
+    if(G.lastSwap){ const k=G.lastSwap.find(p=>g.cells.some(cl=>cl.r===p.r&&cl.c===p.c)); if(k) anchor=k; }
+    if(g.len>=5) specials.push({r:anchor.r,c:anchor.c,s:"bomb"});
+    else if(g.len===4) specials.push({r:anchor.r,c:anchor.c,s:g.dir==="row"?"row":"col"});
+    g.cells.forEach(cl=>clear.set(cl.r+","+cl.c, cl));
+  });
+  const extra=[];
+  clear.forEach(cl=>{
+    const cell=G.board[cl.r][cl.c]; if(!cell) return;
+    if(cell.s==="row"){ for(let c=0;c<8;c++) extra.push({r:cl.r,c:c}); }
+    else if(cell.s==="col"){ for(let r=0;r<8;r++) extra.push({r:r,c:cl.c}); }
+    else if(cell.s==="bomb"){ for(let c=0;c<8;c++) extra.push({r:cl.r,c:c}); for(let r=0;r<8;r++) extra.push({r:r,c:cl.c}); }
+  });
+  extra.forEach(cl=>clear.set(cl.r+","+cl.c, cl));
+  return { clear:[...clear.values()], specials:specials };
+}
+function cellEl(r,c){ return $("board").children[r*8+c]; }
+function renderBoard(animateDrop){
+  const b=$("board"); b.innerHTML="";
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const cell=G.board[r][c];
+    const el=document.createElement("div");
+    el.className="cell t"+cell.t+(cell.s?" special":"")+((cell.fresh&&animateDrop)?" drop":"");
+    el.textContent=CANDY[cell.t];
+    el.dataset.r=r; el.dataset.c=c;
+    if(cell.s){ const badge=document.createElement("span"); badge.className="badge";
+      badge.textContent = cell.s==="row"?"⇔":cell.s==="col"?"⇕":"💥"; el.appendChild(badge); }
+    el.addEventListener("click", ()=>onCellClick(r,c));
+    b.appendChild(el);
+    if(cell.fresh) cell.fresh=false;
+  }
+  if(G.selected){ const el=cellEl(G.selected.r,G.selected.c); if(el) el.classList.add("selected"); }
+}
+function applyGravity(){
+  for(let c=0;c<8;c++){
+    const col=[];
+    for(let r=7;r>=0;r--) if(G.board[r][c]) col.push(G.board[r][c]);
+    let r=7;
+    col.forEach(cell=>{ G.board[r][c]=cell; r--; });
+    while(r>=0){ G.board[r][c]={t:randType(G.cfg.types), s:null, fresh:true}; r--; }
+  }
+}
+function swapCreatesMatch(r1,c1,r2,c2){
+  const a=G.board[r1][c1], b=G.board[r2][c2];
+  G.board[r1][c1]=b; G.board[r2][c2]=a;
+  const m=findMatches().length>0;
+  G.board[r1][c1]=a; G.board[r2][c2]=b;
+  return m;
+}
+function hasPossibleMove(){
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    if(c<7 && swapCreatesMatch(r,c,r,c+1)) return true;
+    if(r<7 && swapCreatesMatch(r,c,r+1,c)) return true;
+  }
+  return false;
+}
+function shuffleBoard(silent){
+  const flat=G.board.flat();
+  for(let i=flat.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=flat[i]; flat[i]=flat[j]; flat[j]=t; }
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++) G.board[r][c]=flat[r*8+c];
+  let guard=0;
+  while((findMatches().length>0 || !hasPossibleMove()) && guard++<60){
+    for(let i=flat.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=flat[i]; flat[i]=flat[j]; flat[j]=t; }
+    for(let r=0;r<8;r++) for(let c=0;c<8;c++) G.board[r][c]=flat[r*8+c];
+  }
+  if(!silent) Sound.shuffleSnd();
+  renderBoard(true);
+}
+async function resolveBoard(){
+  let cascade=0;
+  const gen=G.gen;
+  while(true){
+    if(gen!==G.gen) return cascade;
+    const groups=findMatches();
+    if(!groups.length) break;
+    cascade++;
+    const res=cellsToClear(groups);
+    const specialKeys=new Set(res.specials.map(s=>s.r+","+s.c));
+    const toClear=res.clear.filter(cl=>!specialKeys.has(cl.r+","+cl.c));
+    toClear.forEach(cl=>{ const el=cellEl(cl.r,cl.c); if(el) el.classList.add("pop"); });
+    await sleep(190);
+    if(gen!==G.gen) return cascade;
+    let gained=0;
+    toClear.forEach(cl=>{ if(G.board[cl.r][cl.c]){ G.board[cl.r][cl.c]=null; gained++; } });
+    res.specials.forEach(s=>{ const cell=G.board[s.r] && G.board[s.r][s.c]; if(cell) cell.s=s.s; });
+    const pts=Math.round(gained*10*G.cfg.mult*(1+0.25*(cascade-1)));
+    G.score+=pts; G.earned+=gained;
+    data().totalCleared+=gained; // score only — coins are won by finishing the level
+    Sound.match(cascade);
+    updateHUD();
+    applyGravity();
+    renderBoard(true);
+    await sleep(230);
+    if(gen!==G.gen) return cascade;
+  }
+  return cascade;
+}
+function useMagic(){
+  if(G.busy||G.over) return;
+  const b=data().boosters;
+  if((b.magic||0)<=0){ banner("No Magic left — buy more in the shop!",2500); return; }
+  const counts={};
+  G.board.flat().forEach(cell=>{ counts[cell.t]=(counts[cell.t]||0)+1; });
+  let bestT=0, bestN=-1;
+  Object.keys(counts).forEach(k=>{ if(counts[k]>bestN){ bestN=counts[k]; bestT=+k; } });
+  b.magic--; saveCurrent(); updateHUD();
+  Sound.magic();
+  const cells=[];
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(G.board[r][c].t===bestT){
+    cells.push({r:r,c:c});
+    const el=cellEl(r,c); if(el) el.classList.add("sparkle");
+  }
+  (async()=>{
+    const gen=G.gen; G.busy=true;
+    await sleep(260);
+    if(gen!==G.gen){ G.busy=false; return; }
+    cells.forEach(cl=>{ const el=cellEl(cl.r,cl.c); if(el) el.classList.add("pop"); });
+    await sleep(190);
+    if(gen!==G.gen){ G.busy=false; return; }
+    let gained=0;
+    cells.forEach(cl=>{ if(G.board[cl.r][cl.c]){ G.board[cl.r][cl.c]=null; gained++; } });
+    G.score+=Math.round(gained*10*G.cfg.mult);
+    G.earned+=gained; data().totalCleared+=gained;
+    updateHUD();
+    applyGravity(); renderBoard(true);
+    await sleep(230);
+    if(gen!==G.gen){ G.busy=false; return; }
+    await resolveBoard();
+    if(gen!==G.gen){ G.busy=false; return; }
+    if(!hasPossibleMove()){ shuffleBoard(true); banner("No moves left — board shuffled!",2500); }
+    saveCurrent(); endTurnCheck();
+    G.busy=false;
+  })();
+}
+function onCellClick(r,c){
+  if(G.busy||G.over) return;
+  Sound.ensure();
+  if(G.hammerMode){
+    if(data().boosters.hammer<=0){ banner("No hammers — buy more in the shop!",2500); G.hammerMode=false; return; }
+    data().boosters.hammer--; G.hammerMode=false;
+    Sound.hammer();
+    if(G.board[r][c]){ G.board[r][c]=null; G.score+=Math.round(10*G.cfg.mult); data().totalCleared+=1; }
+    applyGravity(); renderBoard(true); updateHUD(); saveCurrent();
+    (async()=>{ const gen=G.gen; G.busy=true; await resolveBoard(); if(gen!==G.gen){ G.busy=false; return; } G.busy=false; endTurnCheck(); })();
+    return;
+  }
+  if(!G.selected){ G.selected={r:r,c:c}; Sound.select(); renderBoard(); return; }
+  const s=G.selected;
+  if(s.r===r&&s.c===c){ G.selected=null; renderBoard(); return; }
+  if(Math.abs(s.r-r)+Math.abs(s.c-c)===1){ G.selected=null; trySwap(s,{r:r,c:c}); }
+  else { G.selected={r:r,c:c}; Sound.select(); renderBoard(); }
+}
+async function trySwap(a,b){
+  if(G.busy) return; G.busy=true;
+  const gen=G.gen;
+  const A=G.board[a.r][a.c], B=G.board[b.r][b.c];
+  G.board[a.r][a.c]=B; G.board[b.r][b.c]=A; G.lastSwap=[a,b];
+  Sound.swap(); renderBoard();
+  await sleep(180);
+  if(findMatches().length===0){
+    G.board[a.r][a.c]=A; G.board[b.r][b.c]=B; G.lastSwap=null;
+    Sound.invalid(); renderBoard(); G.busy=false; return;
+  }
+  G.moves--; updateHUD();
+  await resolveBoard();
+  if(gen!==G.gen) return;
+  G.lastSwap=null;
+  if(!hasPossibleMove()){ shuffleBoard(true); banner("No moves left — board shuffled!",2500); }
+  saveCurrent();
+  endTurnCheck();
+  G.busy=false;
+}
+function endTurnCheck(){
+  updateHUD();
+  if(G.score>=G.cfg.target){ winLevel(); return; }
+  if(G.moves<=0){ loseLevel(); }
+}
+function winLevel(){
+  if(G.over) return; G.over=true; stopBonusTimer();
+  const d=data(); d.gamesPlayed++; d.gamesWon++;
+  const stars=starsFor(G.score, G.cfg.target);
+  d.best[G.level]=Math.max(d.best[G.level]||0, G.score);
+  d.stars[G.level]=Math.max(d.stars[G.level]||0, stars);
+  d.totalBest=Math.max(d.totalBest, G.score);
+  // Flat coin award: +50 per level won, +100 for a bonus level. No coins
+  // per candy and no level-based bonus any more.
+  const bonus = G.bonus ? CASHOUT.BONUS_WIN_COINS : CASHOUT.WIN_COINS;
+  d.coins+=bonus;
+  if(G.level>=d.maxUnlocked) d.maxUnlocked=Math.min(TOTAL_LEVELS, G.level+1);
+  saveCurrent();
+  earnCoins(bonus, "win:level:" + G.level + (G.bonus ? ":bonus" : ""));
+  saveGameData();
+  Sound.win();
+  $("win-text").textContent="Score "+G.score+" (target "+G.cfg.target+") • +"+bonus+" coins"+(G.bonus?" — bonus level!":"");
+  $("win-stars").textContent="⭐".repeat(stars)+"☆".repeat(3-stars);
+  $("btn-next").textContent = G.bonus ? "Collect & Home 🏠" : (G.level>=TOTAL_LEVELS ? "You finished all 10,000 levels! 🏆" : "Next Level →");
+  openModal("modal-win");
+}
+function loseLevel(){
+  if(G.over) return; G.over=true; stopBonusTimer();
+  // No life is lost yet: the life is spent only when the player retries or
+  // goes home (loseLifeOnce). Watching an ad for +5 moves continues the
+  // same attempt for free instead.
+  $("lose-text").textContent="You scored "+G.score+" of "+G.cfg.target+" needed.";
+  $("lose-err").textContent="";
+  $("btn-retry").disabled = data().lives<2; // retry spends 1 life and needs 1 left to play
+  refreshLoseAdButton();
+  Sound.lose();
+  openModal("modal-lose");
+}
+// Spend the one life a failed level costs. Called exactly once per failed
+// attempt (retry or home). Guarded so a second lose screen on the same
+// attempt (after an ad continue) never double-charges.
+function loseLifeOnce(){
+  if(G.lifeLost) return;
+  G.lifeLost=true;
+  const d=data(); refreshLives(); d.lives=Math.max(0, d.lives-1); d.gamesPlayed++;
+  saveCurrent(); saveGameData();
+}
+function startLevel(n){
+  const d=data(); refreshLives();
+  if(d.lives<=0){ $("home-msg").textContent="Out of lives! Wait for a refill or buy one in the shop."; showScreen("screen-home"); syncHome(); return; }
+  if(d.boosters.magic==null) d.boosters.magic=1;
+  stopBonusTimer(); G.bonus=false; G.gen=(G.gen||0)+1; G.lifeLost=false; G.adsMovesUsed=0;
+  G.level=n; G.cfg=levelConfig(n); G.score=0; G.moves=G.cfg.moves;
+  $("g-moves-pill").innerHTML='👣 <span id="g-moves">'+G.moves+'</span> moves';
+  G.selected=null; G.busy=false; G.over=false; G.hammerMode=false; G.earned=0; G.lastSwap=null;
+  G.board=newBoard(G.cfg.types);
+  let guard=0; while(!hasPossibleMove() && guard++<20){ G.board=newBoard(G.cfg.types); }
+  $("g-level").textContent=n; $("g-target").textContent=G.cfg.target; $("g-banner").textContent="";
+  $("g-stars").textContent="";
+  renderBoard(false); updateHUD(); showScreen("screen-game");
+  Sound.ensure(); Sound.startMusic();
+}
+function stopBonusTimer(){ if(G.bonusTimer){ clearInterval(G.bonusTimer); G.bonusTimer=null; } }
+function fmtTime(s){ return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+function startBonus(){
+  const d=data(); refreshLives();
+  if(d.lives<=0){ $("home-msg").textContent="Out of lives! Wait for a refill or buy one in the shop."; showScreen("screen-home"); syncHome(); return; }
+  if(d.lastBonus===todayStr()){ $("home-msg").textContent="Bonus Level already played today — come back tomorrow!"; syncHome(); return; }
+  d.lastBonus=todayStr(); saveCurrent();
+  stopBonusTimer(); G.bonus=true; G.gen=(G.gen||0)+1; G.lifeLost=false; G.adsMovesUsed=0;
+  G.level=d.maxUnlocked; G.cfg=levelConfig(G.level);
+  G.cfg.moves=999; G.cfg.target=1200; G.cfg.mult=G.cfg.mult*2;
+  G.score=0; G.earned=0; G.selected=null; G.busy=false; G.over=false; G.hammerMode=false; G.lastSwap=null;
+  G.bonusTime=60;
+  G.board=newBoard(G.cfg.types);
+  let guard=0; while(!hasPossibleMove() && guard++<20){ G.board=newBoard(G.cfg.types); }
+  $("g-level").textContent=G.level; $("g-target").textContent=G.cfg.target; $("g-banner").textContent="";
+  $("g-stars").textContent="";
+  $("g-moves-pill").innerHTML='⏱ <span id="g-moves">1:00</span>';
+  renderBoard(false); updateHUD(); showScreen("screen-game");
+  Sound.ensure(); Sound.startMusic();
+  banner("🎁 Bonus Level! 60 seconds — every candy is worth double coins!", 3000);
+  G.bonusTimer=setInterval(()=>{
+    G.bonusTime--;
+    const el=$("g-moves"); if(el) el.textContent=fmtTime(Math.max(0,G.bonusTime));
+    if(G.bonusTime<=0) endBonus();
+  }, 1000);
+}
+function endBonus(){
+  stopBonusTimer();
+  if(G.over) return;
+  if(G.score>=G.cfg.target){ winLevel(); return; }
+  G.over=true;
+  const d=data(); d.gamesPlayed++;
+  saveCurrent(); saveGameData(); Sound.win();
+  $("win-text").textContent="⏱ Time's up! You scored "+G.score+" — no coins this time. Win a bonus level to earn 100 coins.";
+  $("win-stars").textContent="🍬";
+  $("btn-next").textContent="Collect & Home 🏠";
+  openModal("modal-win");
+}
+let leaveFrom="game";
+function askLeave(from){ if(G.over) return; leaveFrom=from; if(from==="pause") closeModal("modal-pause"); openModal("modal-leave"); }
+function doLeaveLevel(){
+  closeModal("modal-leave");
+  stopBonusTimer(); G.bonus=false;
+  G.gen=(G.gen||0)+1; G.over=true; G.busy=false; G.hammerMode=false;
+  const d=data(); refreshLives(); d.lives=Math.max(0, d.lives-1); d.gamesPlayed++; saveCurrent(); saveGameData();
+  $("home-msg").textContent="You left the level — 1 life lost.";
+  syncHome(); showScreen("screen-home");
+}
+function updateHUD(){
+  $("g-score").textContent=G.score;
+  if(!G.bonus) $("g-moves").textContent=G.moves;
+  $("g-coins").textContent=data().coins;
+  $("g-progress").style.width=Math.min(100, G.score/G.cfg.target*100)+"%";
+  $("c-hammer").textContent=data().boosters.hammer;
+  $("c-shuffle").textContent=data().boosters.shuffle;
+  $("c-magic").textContent=(data().boosters.magic||0);
+  $("g-stars").textContent = G.score>=G.cfg.target ? "⭐".repeat(starsFor(G.score, G.cfg.target)) : "";
+}
+function openModal(id){ $(id).classList.add("open"); }
+function closeModal(id){ $(id).classList.remove("open"); }
+
+/* ================= UI: LEVELS / SHOP / LEADERBOARD ================= */
+let lvlPage=0;
+function renderLevels(){
+  const d=data();
+  const start=lvlPage*PAGE_SIZE+1;
+  const grid=$("level-grid"); grid.innerHTML="";
+  for(let n=start;n<start+PAGE_SIZE && n<=TOTAL_LEVELS;n++){
+    const el=document.createElement("div");
+    const locked=n>d.maxUnlocked;
+    el.className="lvl"+(locked?" locked":"")+(n===d.maxUnlocked?" current":"");
+    const st=d.stars[n]||0;
+    el.innerHTML=n+"<small>"+(st?"★".repeat(st):"☆☆☆")+"</small>";
+    if(!locked) el.addEventListener("click", ()=>{ Sound.click(); startLevel(n); });
+    grid.appendChild(el);
+  }
+  $("lvl-page-label").textContent="Levels "+start+"–"+Math.min(start+PAGE_SIZE-1,TOTAL_LEVELS)+" of 10,000";
+  $("lvl-prev").disabled=lvlPage===0;
+  $("lvl-next").disabled=(lvlPage+1)*PAGE_SIZE>=TOTAL_LEVELS;
+}
+function renderLeaderboard(){
+  const d=data();
+  $("board-title").textContent="Your records — "+current.displayName;
+  $("board-stats").textContent="Best score "+d.totalBest+" • Games played "+d.gamesPlayed+" • Won "+d.gamesWon+" • Candies cleared "+d.totalCleared+" • Reached level "+d.maxUnlocked;
+  const rows=Object.entries(d.best).map(([lv,sc])=>({lv:+lv,sc:sc})).sort((a,b)=>b.sc-a.sc).slice(0,15);
+  $("board-rows").innerHTML=rows.length
+    ? rows.map(r=>"<tr><td>"+r.lv+"</td><td>"+r.sc+"</td><td>"+"★".repeat(d.stars[r.lv]||0)+"</td></tr>").join("")
+    : '<tr><td colspan="3">No scores yet — play your first level!</td></tr>';
+  $("board-profiles").innerHTML=profiles.map(p=>'<div class="shopitem"><div><b>'+p.displayName+'</b><span>@'+p.username+' • Level '+p.data.maxUnlocked+' • 🪙 '+p.data.coins+'</span></div><span>'+(p.id===current.id?"(you)":"")+'</span></div>').join("");
+}
+function doDaily(){
+  if(claimDaily()){ Sound.coin(); $("home-msg").textContent="🎁 Daily bonus claimed: +20 coins!"; }
+  else $("home-msg").textContent="Daily bonus already claimed today — come back tomorrow!";
+  syncHome();
+}
+function toggleMute(){ muted=!muted; localStorage.setItem("sm_muted", muted?"1":"0"); applyMute(); if(!muted) Sound.click(); }
+
+/* ================= CASH OUT ================= */
+function coinsToUsd(coins){ return coins / CASHOUT.RATE_COINS_PER_USD; }
+function fmtUsd(n){ return n.toFixed(2); }
+function escHtml(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+async function openCashout(){
+  Sound.click();
+  $("co-err").textContent=""; $("co-ok").textContent="";
+  $("cashout-offline").style.display = SB.configured ? "none" : "block";
+  $("cashout-unverified").style.display = "none";
+  $("cashout-online").style.display = "none";
+  if (!SB.configured) { openModal("modal-cashout"); return; }
+  if (!SB.online) {
+    // The player may just have verified in the browser — try a stored session once.
+    const restored = await sbRestoreSession();
+    if (!restored || !current || current.supabaseId !== SB.userId) {
+      $("cashout-unverified").style.display = "block";
+      openModal("modal-cashout");
+      return;
+    }
+    await syncFromServer();
+  }
+  $("cashout-online").style.display = "block";
+  $("co-sync-note").textContent = "Syncing with the server…";
+  openModal("modal-cashout");
+  const ok = await syncFromServer();
+  $("co-sync-note").textContent = ok ? "" : "Could not reach the server — showing your last synced balance.";
+  renderCashoutBalance();
+  renderCashoutHistory();
+}
+function renderCashoutBalance(){
+  const c = data().coins;
+  $("co-balance").textContent = c;
+  $("co-usd").textContent = fmtUsd(coinsToUsd(c));
+  updateCoAmountUsd();
+}
+function updateCoAmountUsd(){
+  const n = parseInt(($("co-amount").value || "0").replace(/[^0-9]/g, ""), 10) || 0;
+  $("co-amount-usd").textContent = fmtUsd(coinsToUsd(n));
+}
+async function renderCashoutHistory(){
+  const el = $("co-history");
+  try {
+    const rows = await sbGetWithdrawals();
+    if (!rows.length) { el.innerHTML = "<p class='muted'>No withdrawals yet.</p>"; return; }
+    el.innerHTML = rows.map(w => {
+      const pill = w.status === "paid" ? "paid" : w.status === "rejected" ? "rejected" : w.status === "approved" ? "approved" : "pending";
+      return "<div class='shopitem'><div><b>" + Number(w.coins).toLocaleString() + " 🪙 → $" + Number(w.usd_amount).toFixed(2) + " USDT</b>"
+        + "<span>" + new Date(w.requested_at).toLocaleString() + " • " + escHtml(w.usdt_address) + (w.tx_hash ? " • tx " + escHtml(String(w.tx_hash).slice(0, 18)) + "…" : "") + "</span></div>"
+        + "<span class='pill " + pill + "'>" + w.status + "</span></div>";
+    }).join("");
+  } catch (e) {
+    el.innerHTML = "<p class='muted'>Could not load history right now.</p>";
+  }
+}
+async function submitCashout(){
+  const err = $("co-err"), ok = $("co-ok");
+  err.textContent = ""; ok.textContent = "";
+  if (!SB.online) { err.textContent = "You're not connected to the server — log out and log back in with your verified account."; return; }
+  const addr = $("co-address").value.trim();
+  const amt = parseInt(($("co-amount").value || "").replace(/[^0-9]/g, ""), 10);
+  if (!BSC_ADDR_RE.test(addr)) { err.textContent = "Enter a valid BSC wallet address (0x + 40 hex characters)."; return; }
+  if (!amt || amt < CASHOUT.MIN_CASHOUT_COINS) { err.textContent = "Minimum cashout is " + CASHOUT.MIN_CASHOUT_COINS.toLocaleString() + " coins ($1)."; return; }
+  if (amt > data().coins) { err.textContent = "You only have " + data().coins.toLocaleString() + " coins."; return; }
+  $("btn-cashout-submit").disabled = true;
+  try {
+    const r = await sbRpc("request_withdrawal", { p_user: SB.userId, p_coins: amt, p_address: addr });
+    if (r && typeof r.balance === "number") { data().coins = r.balance; saveCurrent(); syncHome(); }
+    ok.textContent = "Request sent! $" + Number(r.usd_amount).toFixed(2) + " USDT is pending approval — the owner will send it to your wallet.";
+    $("co-address").value = ""; $("co-amount").value = "";
+    renderCashoutBalance(); renderCashoutHistory();
+  } catch (e) {
+    err.textContent = e.message || "Cashout failed — try again.";
+  } finally {
+    $("btn-cashout-submit").disabled = false;
+  }
+}
+
+/* ================= AUTH HANDLERS ================= */
+function showAuthProfiles(){
+  const card=$("auth-profiles-card");
+  if(!profiles.length){ card.style.display="none"; return; }
+  card.style.display="block";
+  $("auth-profiles").innerHTML=profiles.map(p=>'<button class="btn small secondary" data-user="'+p.username+'">@'+p.username+' — '+p.displayName+'</button>').join(" ");
+  document.querySelectorAll("#auth-profiles [data-user]").forEach(b=>b.addEventListener("click",()=>{
+    $("login-user").value=b.dataset.user; $("login-pass").focus(); Sound.click();
+  }));
+}
+async function doLogin(){
+  const u=$("login-user").value.trim(), p=$("login-pass").value;
+  const err=$("login-err"); err.textContent="";
+  $("login-ok").textContent="";
+  $("link-resend").style.display="none";
+  const prof=profiles.find(x=>x.username.toLowerCase()===u.toLowerCase());
+  if(!prof){ err.textContent="No account with that username on this phone."; return; }
+  const h=await sha256hex(prof.salt+":"+p);
+  if(h!==prof.hash){ err.textContent="Wrong password."; return; }
+  current=prof; setSession(prof.id); Sound.coin();
+  if (SB.configured && prof.email) {
+    lastLoginEmail = prof.email;
+    const res = await linkServerAccount(prof, p);
+    if (res === "unverified") {
+      // Unverified accounts still play locally — but the player must SEE
+      // that verification is outstanding (cashout stays locked).
+      enterHome();
+      $("home-msg").textContent = "⚠️ Your email isn't verified yet — check your inbox for the confirmation link. You can play, but cashout needs a verified email.";
+      return;
+    }
+    // "offline" just means the server is unreachable — play locally.
+  }
+  enterHome();
+}
+async function doSignup(){
+  const u=$("su-user").value.trim(), dn=$("su-display").value.trim(), em=$("su-email").value.trim(), p=$("su-pass").value, p2=$("su-pass2").value;
+  const err=$("su-err"); err.textContent="";
+  if(!/^[A-Za-z0-9_]{3,20}$/.test(u)){ err.textContent="Username must be 3–20 letters, numbers or _"; return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)){ err.textContent="Please enter a valid email address (e.g. you@example.com)"; return; }
+  if(profiles.some(x=>x.username.toLowerCase()===u.toLowerCase())){ err.textContent="That username is taken on this phone."; return; }
+  if(p.length<4){ err.textContent="Password must be at least 4 characters."; return; }
+  if(p!==p2){ err.textContent="Passwords do not match."; return; }
+  const salt=genSalt(); const hash=await sha256hex(salt+":"+p);
+  const prof=newProfile(u, dn, hash, salt, em);
+  profiles.push(prof); saveProfiles(profiles);
+  current=prof; setSession(prof.id);
+  if (SB.configured) {
+    try {
+      const res = await sbSignup(em, p, u, dn || u);
+      if (res.session) {
+        // Email confirmation is OFF in this project (or already confirmed):
+        // the account is verified immediately.
+        sbSaveSession(res.session);
+        prof.supabaseId = SB.userId; saveCurrent();
+        await syncFromServer();
+        Sound.coin(); enterHome(); return;
+      }
+      // No session: email confirmation is ON — show the "check your email" screen.
+      showVerifyScreen(em);
+      return;
+    } catch (e) {
+      if (/already registered|already exists/i.test(e.message || "")) {
+        err.textContent = "An account with this email already exists — log in instead.";
+        profiles = profiles.filter(x => x.id !== prof.id); saveProfiles(profiles);
+        current = null; setSession(null);
+        return;
+      }
+      // Server unreachable — the local account still works offline.
+    }
+  }
+  Sound.coin(); enterHome();
+}
+function showVerifyScreen(email){
+  $("auth-login").style.display="none";
+  $("auth-signup").style.display="none";
+  $("auth-verify").style.display="block";
+  $("auth-title").textContent="Verify your email";
+  $("verify-email").textContent=email;
+  $("verify-err").textContent=""; $("verify-ok").textContent="";
+  showScreen("screen-auth");
+}
+function showAuthForm(which){
+  $("auth-verify").style.display="none";
+  $("auth-login").style.display = which === "login" ? "block" : "none";
+  $("auth-signup").style.display = which === "signup" ? "block" : "none";
+  $("auth-title").textContent = which === "login" ? "Welcome back" : "Create your account";
+}
+function enterHome(){ syncHome(); showScreen("screen-home"); }
+function logout(){ current=null; setSession(null); sbClearSession(); showAuthProfiles(); showScreen("screen-auth"); }
+
+/* ================= INIT ================= */
+function init(){
+  applyMute();
+  AdProvider.init();
+  document.querySelectorAll(".logo-tiles").forEach(el=>{
+    el.innerHTML="MATCH-3".split("").map(ch=>'<span class="tile">'+ch+'</span>').join("");
+  });
+  document.querySelectorAll(".ribbon").forEach(el=>{ el.textContent="EARN"; });
+  $("btn-bonus").addEventListener("click", ()=>{ Sound.click(); startBonus(); });
+  $("btn-back").addEventListener("click", ()=>{ Sound.click(); askLeave("game"); });
+  $("btn-game-settings").addEventListener("click", toggleMute);
+  $("btn-pause-top").addEventListener("click", ()=>{ Sound.click(); openModal("modal-pause"); });
+  $("link-signup").addEventListener("click", ()=>{ $("auth-login").style.display="none"; $("auth-signup").style.display="block"; $("auth-title").textContent="Create your account"; Sound.click(); });
+  $("link-login").addEventListener("click", ()=>{ $("auth-signup").style.display="none"; $("auth-login").style.display="block"; $("auth-title").textContent="Welcome back"; Sound.click(); });
+  $("btn-login").addEventListener("click", doLogin);
+  $("btn-signup").addEventListener("click", doSignup);
+  $("login-pass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+  $("btn-play").addEventListener("click", ()=>{ Sound.click(); startLevel(data().maxUnlocked); });
+  const openLevels=()=>{ Sound.click(); lvlPage=Math.floor((data().maxUnlocked-1)/PAGE_SIZE); renderLevels(); showScreen("screen-levels"); };
+  $("btn-levels").addEventListener("click", openLevels);
+  $("btn-map").addEventListener("click", openLevels);
+  $("btn-shop-top").addEventListener("click", ()=>{ Sound.click(); $("shop-coins").textContent=data().coins; $("shop-usd").textContent=(data().coins/CASHOUT.RATE_COINS_PER_USD).toFixed(2); openModal("modal-shop"); });
+  $("btn-cashout").addEventListener("click", openCashout);
+  $("btn-cashout-close").addEventListener("click", ()=>{ Sound.click(); closeModal("modal-cashout"); syncHome(); });
+  $("btn-cashout-submit").addEventListener("click", ()=>{ Sound.click(); submitCashout(); });
+  $("co-max").addEventListener("click", ()=>{ $("co-amount").value = String(data().coins); updateCoAmountUsd(); Sound.click(); });
+  $("co-amount").addEventListener("input", updateCoAmountUsd);
+  $("btn-co-resend").addEventListener("click", async ()=>{
+    $("co-err").textContent=""; $("co-ok").textContent="";
+    try { await sbResend(lastLoginEmail || (current && current.email) || ""); $("co-ok").textContent="Confirmation email resent — check your inbox."; }
+    catch(e){ $("co-err").textContent = e.message; }
+  });
+  $("btn-verify-login").addEventListener("click", ()=>{ Sound.click(); showAuthForm("login"); });
+  $("btn-verify-resend").addEventListener("click", async ()=>{
+    try { await sbResend($("verify-email").textContent); $("verify-ok").textContent="Confirmation email resent — check your inbox."; $("verify-err").textContent=""; }
+    catch(e){ $("verify-err").textContent = e.message; }
+  });
+  $("link-verify-back").addEventListener("click", ()=>{ Sound.click(); showAuthForm("login"); });
+  $("link-resend").addEventListener("click", async ()=>{
+    $("login-err").textContent=""; $("login-ok").textContent="";
+    try { await sbResend(lastLoginEmail); $("login-ok").textContent="Confirmation email resent — check your inbox."; $("link-resend").style.display="none"; }
+    catch(e){ $("login-err").textContent = e.message; }
+  });
+  $("btn-board").addEventListener("click", ()=>{ Sound.click(); renderLeaderboard(); showScreen("screen-board"); });
+  $("btn-profile").addEventListener("click", ()=>{ Sound.click(); renderLeaderboard(); showScreen("screen-board"); });
+  $("btn-daily").addEventListener("click", doDaily);
+  $("btn-daily-top").addEventListener("click", doDaily);
+  $("btn-piggy").addEventListener("click", doDaily);
+  $("btn-settings").addEventListener("click", toggleMute);
+  $("btn-sound").addEventListener("click", toggleMute);
+  $("btn-switch").addEventListener("click", ()=>{ Sound.click(); logout(); });
+  $("btn-levels-back").addEventListener("click", ()=>{ Sound.click(); syncHome(); showScreen("screen-home"); });
+  $("lvl-prev").addEventListener("click", ()=>{ if(lvlPage>0){ lvlPage--; renderLevels(); } });
+  $("lvl-next").addEventListener("click", ()=>{ if((lvlPage+1)*PAGE_SIZE<TOTAL_LEVELS){ lvlPage++; renderLevels(); } });
+  $("lvl-jump-btn").addEventListener("click", ()=>{
+    const n=parseInt($("lvl-jump").value,10);
+    if(n>=1&&n<=TOTAL_LEVELS){ lvlPage=Math.floor((n-1)/PAGE_SIZE); renderLevels(); }
+  });
+  $("btn-hammer").addEventListener("click", ()=>{ if(G.busy||G.over) return; if(data().boosters.hammer<=0){ banner("No hammers — buy more in the shop!",2500); return; } G.hammerMode=!G.hammerMode; banner(G.hammerMode?"🔨 Tap a candy to smash it!":"Hammer off",1500); Sound.click(); });
+  $("btn-shuffle").addEventListener("click", ()=>{ if(G.busy||G.over) return; if(data().boosters.shuffle<=0){ banner("No shuffles — buy more in the shop!",2500); return; } data().boosters.shuffle--; shuffleBoard(false); updateHUD(); saveCurrent(); });
+  $("btn-magic").addEventListener("click", ()=>{ Sound.click(); useMagic(); });
+  $("btn-resume").addEventListener("click", ()=>{ Sound.click(); closeModal("modal-pause"); });
+  $("btn-restart").addEventListener("click", ()=>{ closeModal("modal-pause"); startLevel(G.level); });
+  $("btn-quit").addEventListener("click", ()=>{ Sound.click(); askLeave("pause"); });
+  $("btn-leave-yes").addEventListener("click", ()=>{ Sound.click(); doLeaveLevel(); });
+  $("btn-leave-no").addEventListener("click", ()=>{ Sound.click(); closeModal("modal-leave"); if(leaveFrom==="pause") openModal("modal-pause"); });
+  $("btn-next").addEventListener("click", ()=>{ closeModal("modal-win"); if(G.bonus){ G.bonus=false; syncHome(); showScreen("screen-home"); return; } if(G.level<TOTAL_LEVELS) startLevel(G.level+1); else { syncHome(); showScreen("screen-home"); } });
+  $("btn-win-home").addEventListener("click", ()=>{ closeModal("modal-win"); syncHome(); showScreen("screen-home"); });
+  $("btn-retry").addEventListener("click", ()=>{ loseLifeOnce(); closeModal("modal-lose"); startLevel(G.level); });
+  $("btn-lose-home").addEventListener("click", ()=>{ loseLifeOnce(); closeModal("modal-lose"); syncHome(); showScreen("screen-home"); });
+  $("btn-lose-ad").addEventListener("click", async ()=>{
+    const btn=$("btn-lose-ad"); btn.disabled=true;
+    const ok = await watchAdFor("moves", ()=>{
+      G.over=false; G.moves+=ADS.EXTRA_MOVES; updateHUD();
+      closeModal("modal-lose"); $("lose-err").textContent="";
+      banner("+"+ADS.EXTRA_MOVES+" moves — keep going!", 2500); Sound.coin();
+    }, $("lose-err"));
+    btn.disabled=false;
+    if (!ok) refreshLoseAdButton();
+  });
+  document.querySelectorAll("[data-free-booster]").forEach(btn=>btn.addEventListener("click", async ()=>{
+    btn.disabled=true;
+    await watchAdFor("booster", ()=>grantFreeBooster(btn.dataset.freeBooster), $("shop-err"));
+    btn.disabled=false;
+  }));
+  $("btn-free-life").addEventListener("click", async ()=>{
+    const btn=$("btn-free-life"); btn.disabled=true;
+    await watchAdFor("life", grantExtraLife, $("shop-err"));
+    btn.disabled=false;
+  });
+  $("btn-life-ad").addEventListener("click", async ()=>{
+    const btn=$("btn-life-ad"); btn.disabled=true;
+    await watchAdFor("life", grantExtraLife, $("home-msg"));
+    btn.disabled=false;
+    syncHome();
+  });
+  $("btn-shop-close").addEventListener("click", ()=>{ Sound.click(); closeModal("modal-shop"); syncHome(); });
+  document.querySelectorAll("[data-buy]").forEach(btn=>btn.addEventListener("click", ()=>{
+    const d=data(); const kind=btn.dataset.buy; const err=$("shop-err");
+    err.className="err"; err.textContent="";
+    const price=SHOP_PRICES[kind];
+    if(d.coins<price){ err.textContent="Not enough coins!"; return; }
+    if(kind==="life" && d.lives>=LIFE_MAX){ err.textContent="Lives are already full!"; return; }
+    d.coins-=price;
+    if(kind==="life") d.lives++; else d.boosters[kind]=(d.boosters[kind]||0)+1;
+    spendServer(price, "shop:"+kind); saveGameData();
+    Sound.coin(); saveCurrent(); syncHome(); $("shop-coins").textContent=d.coins;
+    $("shop-usd").textContent=(d.coins/CASHOUT.RATE_COINS_PER_USD).toFixed(2);
+    err.className="okmsg"; err.textContent="Bought! ✓";
+    setTimeout(()=>{ err.textContent=""; err.className="err"; },1500);
+  }));
+  $("btn-board-back").addEventListener("click", ()=>{ Sound.click(); syncHome(); showScreen("screen-home"); });
+  const boardEl=$("board");
+  let tsCell=null, tsX=0, tsY=0;
+  boardEl.addEventListener("touchstart", e=>{ const cell=e.target.closest(".cell"); if(!cell) return; tsCell={r:+cell.dataset.r, c:+cell.dataset.c}; tsX=e.changedTouches[0].clientX; tsY=e.changedTouches[0].clientY; }, {passive:true});
+  boardEl.addEventListener("touchend", e=>{
+    if(!tsCell) return; const t=e.changedTouches[0];
+    const dx=t.clientX-tsX, dy=t.clientY-tsY; const c0=tsCell; tsCell=null;
+    if(Math.max(Math.abs(dx),Math.abs(dy))<24) return;
+    let nb=null;
+    if(Math.abs(dx)>Math.abs(dy)) nb={r:c0.r, c:c0.c+(dx>0?1:-1)};
+    else nb={r:c0.r+(dy>0?1:-1), c:c0.c};
+    if(nb.r<0||nb.r>7||nb.c<0||nb.c>7||G.busy||G.over) return;
+    G.selected=null; trySwap(c0, nb);
+  }, {passive:true});
+  document.addEventListener("pointerdown", ()=>{ Sound.ensure(); Sound.startMusic(); }, {once:true});
+  // Stop the music when the app is minimized / the page is hidden, and
+  // bring it back when the app returns (unless the user muted it).
+  document.addEventListener("visibilitychange", ()=>{
+    if (!Sound.ctx) return;
+    if (document.hidden){
+      if (Sound.ctx.state === "running") Sound.ctx.suspend();
+    } else if (!muted && Sound.ctx.state === "suspended"){
+      Sound.ctx.resume();
+    }
+  });
+  setInterval(()=>{ if(current && $("screen-home").classList.contains("active")) syncHome(); }, 30000);
+  const sid=getSession();
+  const prof=sid && profiles.find(p=>p.id===sid);
+  if(prof){ current=prof; enterHome(); }
+  else { showAuthProfiles(); showScreen("screen-auth"); }
+  // If the player verified their email in the browser since last time, a
+  // stored server session may exist — restore it and sync (only when the
+  // local profile belongs to the same account).
+  if (SB.configured) {
+    sbRestoreSession().then(ok => {
+      if (!ok || !current) return;
+      if (current.supabaseId && current.supabaseId !== SB.userId) { sbClearSession(); return; }
+      if (current.email && SB.email && current.email.toLowerCase() === SB.email.toLowerCase()) {
+        if (!current.supabaseId) { current.supabaseId = SB.userId; saveCurrent(); }
+        syncFromServer();
+      }
+    });
+  }
+}
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>

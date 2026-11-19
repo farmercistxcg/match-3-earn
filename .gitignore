@@ -1,0 +1,10 @@
+# Keep secrets and build output out of the repo.
+*.keystore
+keystore.properties
+local.properties
+.gradle/
+build/
+app/build/
+*.iml
+.idea/
+.DS_Store
