@@ -86,10 +86,13 @@ jobs:
           ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
           ADMOB_REWARDED_AD_UNIT_ID: ${{ secrets.ADMOB_REWARDED_AD_UNIT_ID }}
         run: |
-          EXTRA=""
-          if [ -n "$ADMOB_APP_ID" ]; then EXTRA="$EXTRA -PadmobAppId=$ADMOB_APP_ID"; fi
-          if [ -n "$ADMOB_REWARDED_AD_UNIT_ID" ]; then EXTRA="$EXTRA -PadmobRewardedAdUnitId=$ADMOB_REWARDED_AD_UNIT_ID"; fi
-          ./gradlew assembleRelease --stacktrace $EXTRA
+          # Build the argument list as an array so a secret value can never
+          # word-split into a bare Gradle task (run 45082770706 failed that
+          # way: Task '***' not found). Each -P flag stays one word.
+          ARGS=(assembleRelease --stacktrace)
+          if [ -n "$ADMOB_APP_ID" ]; then ARGS+=("-PadmobAppId=$ADMOB_APP_ID"); fi
+          if [ -n "$ADMOB_REWARDED_AD_UNIT_ID" ]; then ARGS+=("-PadmobRewardedAdUnitId=$ADMOB_REWARDED_AD_UNIT_ID"); fi
+          ./gradlew "${ARGS[@]}"
 
       - name: Verify APK
         run: |
