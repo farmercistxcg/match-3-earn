@@ -674,7 +674,7 @@
     <button class="btn" id="btn-tourn-join">Join Challenge</button>
     <table style="margin-top:8px"><thead><tr><th>#</th><th>Player</th><th>⭐ Stars</th></tr></thead>
     <tbody id="tourn-rows"></tbody></table>
-    <p class="muted" style="margin:8px 0 0">Stars count only from levels you finish <b>after</b> joining, within your 24 hours. Top 7 win prizes when your 24 hours end: 1st = 1000 coins + 🔨🔀✨, 2nd = 700 + 2 boosters, 3rd = 300 + 1 booster, 4th–7th = 100 + 1 booster.</p>
+    <p class="muted" style="margin:8px 0 0">Stars count only from levels you finish <b>after</b> joining, within your 24 hours. Top 7 win prizes when your 24 hours end: 1st = 20000 coins + 🔨🔀✨, 2nd = 10000 + 2 boosters, 3rd = 5000 + 1 booster, 4th–7th = 100 + 1 booster.</p>
   </div>
   <div class="card">
     <b id="board-title">Your records</b>
@@ -2599,9 +2599,9 @@ function closeModal(id){ $(id).classList.remove("open"); }
    (settled on next open) the Rank pill cycles to its third state:
    CLAIM. settleChallenge only RANKS the player and stores the
    pending prize — nothing is credited until the player taps the
-   Claim pill ("🎁 Claim +1000 coins"), which pays the coins +
-   boosters exactly once: 1st 1000 coins + Hammer/Shuffle/Magic,
-   2nd 700 + Hammer/Shuffle, 3rd 300 + Hammer, 4th–7th 100 +
+   Claim pill ("🎁 Claim +20000 coins"), which pays the coins +
+   boosters exactly once: 1st 20000 coins + Hammer/Shuffle/Magic,
+   2nd 10000 + Hammer/Shuffle, 3rd 5000 + Hammer, 4th–7th 100 +
    Hammer. 8th and below: no prize, the pill goes back to Join and
    the final rank is shown. The pill therefore shows three things,
    one after another: Join → Countdown → Claim. Challenge state
@@ -2657,8 +2657,17 @@ function tournTable(seedStr, growth){
   const names = TOURN_NAMES.slice();
   for (let i = names.length - 1; i > 0; i--){ const j = Math.floor(rng() * (i + 1)); const t = names[i]; names[i] = names[j]; names[j] = t; }
   const g = (typeof growth === "number" && isFinite(growth)) ? Math.min(1, Math.max(0, growth)) : 1;
+  /* Rival final stars (v26+: HARD board): 30 + 220*u^2, u uniform —
+     skewed low, so most rivals finish around 30–90 stars but a few
+     grinders reach ~250. Growth g is wall-clock elapsed time
+     (challengeGrowth: 0.30 at join -> 1.00 at 24h), recomputed on
+     every render, so rivals keep climbing even while the app is
+     closed. Tuned so a player parked at 1st–3rd who then plays
+     nothing for ~8h slides to about 7th–15th, while a player who
+     keeps winning levels holds the top 3. Reaching the top takes
+     ~30 level wins — it is not handed out. */
   const rows = names.slice(0, 25).map(n => {
-    const finalStars = 25 + Math.floor(rng() * 65); // 25..89 at the end
+    const finalStars = 30 + Math.floor(220 * Math.pow(rng(), 2)); // 30..250 at the end
     return { name: n, stars: Math.max(3, Math.round(finalStars * g)) };
   });
   rows.sort((a, b) => b.stars - a.stars);
@@ -2670,9 +2679,9 @@ function tournRank(table, userStars){
   return rank;
 }
 function tournPrizeForRank(rank){
-  if (rank === 1) return { coins: 1000, boosters: { hammer: 1, shuffle: 1, magic: 1 } };
-  if (rank === 2) return { coins: 700, boosters: { hammer: 1, shuffle: 1 } };
-  if (rank === 3) return { coins: 300, boosters: { hammer: 1 } };
+  if (rank === 1) return { coins: 20000, boosters: { hammer: 1, shuffle: 1, magic: 1 } };
+  if (rank === 2) return { coins: 10000, boosters: { hammer: 1, shuffle: 1 } };
+  if (rank === 3) return { coins: 5000, boosters: { hammer: 1 } };
   if (rank >= 4 && rank <= 7) return { coins: 100, boosters: { hammer: 1 } };
   return null;
 }
@@ -2706,20 +2715,60 @@ function settleChallenge(now){
   saveCurrent(); saveGameData();
   return result;
 }
-/* Claim the pending Daily Challenge prize (v22 claim flow): the pill
-   cycles Join → Countdown → Claim. settleChallenge only STORES the
-   pending prize; the credit happens here, once, when the player taps
-   Claim. Double-claims are impossible: the result is marked claimed
-   BEFORE any credit lands, and the pill only shows Claim while
-   lastResult is a daily result with a prize and claimed === false. */
-function claimChallengePrize(){
+/* Claim the pending Daily Challenge prize (v22 claim flow, v28 prize
+   exemption): the pill cycles Join → Countdown → Claim. settleChallenge
+   only STORES the pending prize; the credit happens here, once, when the
+   player taps Claim.
+   ONLINE + verified (migration 005_challenge_prize_exemption.sql): the
+   server pays the FULL prize with NO daily cap via claim_challenge_prize,
+   which verifies the settled result against the STORED game_data and
+   computes the amount from the stored rank — the client never sends an
+   amount. Ordering (so the player never sees coins vanish): NOTHING is
+   added locally until the server confirms. The settled result is pushed
+   to the server first (saveGameData), then the RPC runs; only on success
+   do we take the server balance and mark claimed. A failed RPC leaves
+   the prize pending — claimed stays false, the pill stays on Claim, and
+   the player can tap again. Double-taps while a claim is in flight are
+   blocked by the claimingChallenge flag; the server also marks the
+   stored result claimed in the same transaction, so a second claim is
+   refused even across reinstalls.
+   OFFLINE / unverified: the server cannot verify a prize it has never
+   seen, so the old local-only path is kept — coins are added locally
+   and mirrored later in chunks, exactly as before. */
+let claimingChallenge = false;
+async function claimChallengePrize(){
   if (!current) return false;
   const d = data(); if (!d) return false;
   const t = ensureChallenge();
   const lr = t.lastResult;
   if (!lr || lr.kind !== "daily" || !lr.prize || lr.claimed) return false;
   if (t.joinedAt) return false; // still running — settle first
+  if (claimingChallenge) return false; // a claim is already in flight
   const prize = lr.prize;
+  // Online + verified: server-verified claim (migration 005).
+  if (SB.online && SB.configured && SB.userId && current.verified) {
+    claimingChallenge = true;
+    try {
+      // Push the settled result to the server FIRST so the RPC can
+      // verify it against stored game_data (a settle done offline
+      // would otherwise look like "no settled prize" server-side).
+      await saveGameData();
+      const r = await sbRpc("claim_challenge_prize", { p_user: SB.userId });
+      if (!r || typeof r.balance !== "number" || !r.claimed) throw new Error("Prize claim failed");
+      lr.claimed = true; // the server already marked it claimed — mirror locally
+      for (const k of Object.keys(prize.boosters || {})) d.boosters[k] = (d.boosters[k] || 0) + prize.boosters[k];
+      d.coins = r.balance; // server balance is the truth — never add locally first
+      saveCurrent(); saveGameData();
+      Sound.coin(); syncHome(); renderLeaderboard();
+      return true;
+    } catch (e) {
+      // Prize stays pending: claimed is still false, the pill stays on
+      // Claim, and the player can tap again. Nothing was added locally,
+      // so nothing can vanish.
+      return false;
+    } finally { claimingChallenge = false; }
+  }
+  // Offline / unverified: local-only claim, as before.
   lr.claimed = true; // mark FIRST so a double-tap / re-render can't pay twice
   d.coins += prize.coins;
   for (const k of Object.keys(prize.boosters || {})) d.boosters[k] = (d.boosters[k] || 0) + prize.boosters[k];
@@ -2870,13 +2919,20 @@ function renderLeaderboard(){
    every second while the Rank tab is open. When the 24h run out, the
    tab re-renders (settleChallenge stores the pending prize and the
    pill flips to Claim — or back to Join Challenge when there is no
-   prize). */
+   prize). v26+: the table itself re-renders about once a minute
+   while the tab is open, so rival stars visibly climb as
+   wall-clock time passes. */
+let lastBoardTickRender = 0;
 function tickChallengeCountdown(){
   if (!current) return;
   if (!$("screen-board").classList.contains("active")) return;
   const t = ensureChallenge();
   if (!t.joinedAt) return;
   if (Date.now() >= t.joinedAt + CHALLENGE_MS){ renderLeaderboard(); return; }
+  // Re-render the table about once a minute while the Rank tab is
+  // open, so rival stars climb live (the table is always computed
+  // from wall-clock elapsed time — this only refreshes the display).
+  if (Date.now() - lastBoardTickRender > 60000){ lastBoardTickRender = Date.now(); renderLeaderboard(); return; }
   const btn = $("btn-tourn-join");
   if (btn) btn.textContent = "⏰ " + challengeTimeLeftSecs(t.joinedAt, new Date());
 }
