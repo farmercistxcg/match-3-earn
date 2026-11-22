@@ -3,8 +3,8 @@
      no AppCompat): package com.youcandoit2221.game, minSdk 24, targetSdk 36,
      INTERNET only, framework Theme.Material.NoActionBar. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    android:versionCode="7"
-    android:versionName="1.6">
+    android:versionCode="27"
+    android:versionName="3.6">
 
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.INTERNET" />
