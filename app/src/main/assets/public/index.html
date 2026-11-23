@@ -2271,6 +2271,10 @@ function applyGravity(){
 }
 function swapCreatesMatch(r1,c1,r2,c2){
   const a=G.board[r1][c1], b=G.board[r2][c2];
+  // v32: two specials paired together are always a valid move, even with
+  // no 3-match — otherwise hasPossibleMove() would shuffle a board whose
+  // only move is a special pair.
+  if(a.s && b.s) return true;
   G.board[r1][c1]=b; G.board[r2][c2]=a;
   const m=findMatches().length>0;
   G.board[r1][c1]=a; G.board[r2][c2]=b;
@@ -2408,6 +2412,45 @@ function onCellClick(r,c){
   if(Math.abs(s.r-r)+Math.abs(s.c-c)===1){ G.selected=null; trySwap(s,{r:r,c:c}); }
   else { G.selected={r:r,c:c}; Sound.select(); renderBoard(); }
 }
+/* Special+special combos (v32 fix): before this, swapping two specials was
+   treated as an invalid move and swapped straight back, because trySwap only
+   kept a swap that made a 3-match of one colour — and two specials never do.
+   Now: bomb+bomb clears the whole board, bomb+striped clears every candy of
+   the striped candy's colour plus the bomb's row+column cross, and
+   striped+striped fires each striped in its own direction. */
+async function fireSpecialCombo(a,b,A,B){
+  const gen=G.gen;
+  const clear=new Set();
+  const key=(r,c)=>r+","+c;
+  const addRow=r=>{ for(let c=0;c<8;c++) clear.add(key(r,c)); };
+  const addCol=c=>{ for(let r=0;r<8;r++) clear.add(key(r,c)); };
+  const isBomb=s=>s==="bomb";
+  if(isBomb(A.s) && isBomb(B.s)){
+    for(let r=0;r<8;r++) for(let c=0;c<8;c++) clear.add(key(r,c));
+    showComboPopup("💥 MEGA BOOM!");
+  } else if(isBomb(A.s) || isBomb(B.s)){
+    const striped=isBomb(A.s)?B:A, sp=isBomb(A.s)?b:a, bp=isBomb(A.s)?a:b;
+    for(let r=0;r<8;r++) for(let c=0;c<8;c++) if(G.board[r][c].t===striped.t) clear.add(key(r,c));
+    addRow(sp.r); addCol(sp.c); addRow(bp.r); addCol(bp.c);
+    showComboPopup("💥 Colour Blast!");
+  } else {
+    [[a,A],[b,B]].forEach(([p,s])=>{ if(s.s==="row") addRow(p.r); else addCol(p.c); });
+    showComboPopup("⚡ Double Striped!");
+  }
+  flashBoard(); shakeScreen();
+  clear.forEach(k=>{ const [r,c]=k.split(",").map(Number); const el=cellEl(r,c); if(el) el.classList.add("pop"); spawnBurst(r,c,true); });
+  await sleep(190);
+  if(gen!==G.gen) return;
+  let gained=0;
+  clear.forEach(k=>{ const [r,c]=k.split(",").map(Number); if(G.board[r][c]){ G.board[r][c]=null; gained++; } });
+  G.score+=Math.round(gained*10*G.cfg.mult); G.earned+=gained; data().totalCleared+=gained;
+  Sound.match(1);
+  updateHUD();
+  applyGravity(); renderBoard(true);
+  await sleep(230);
+  if(gen!==G.gen) return;
+  await resolveBoard();
+}
 async function trySwap(a,b){
   if(G.busy) return; G.busy=true;
   const gen=G.gen;
@@ -2415,6 +2458,18 @@ async function trySwap(a,b){
   G.board[a.r][a.c]=B; G.board[b.r][b.c]=A; G.lastSwap=[a,b];
   Sound.swap(); renderBoard();
   await sleep(180);
+  // v32: two specials paired together always fire — no 3-match needed.
+  if(A.s && B.s){
+    G.moves--; updateHUD();
+    await fireSpecialCombo(a,b,A,B);
+    if(gen!==G.gen) return;
+    G.lastSwap=null;
+    if(!hasPossibleMove()){ shuffleBoard(true); banner("No moves left — board shuffled!",2500); }
+    saveCurrent();
+    endTurnCheck();
+    G.busy=false;
+    return;
+  }
   if(findMatches().length===0){
     G.board[a.r][a.c]=A; G.board[b.r][b.c]=B; G.lastSwap=null;
     Sound.invalid(); renderBoard(); G.busy=false; return;
