@@ -853,6 +853,14 @@
   <button class="btn ghost" id="btn-testad-close">Close ad (no reward)</button>
 </div></div>
 
+<!-- Info popup (v30): red footer messages now pop up in the middle of the
+     screen with an OK button, instead of sitting as small text at the
+     bottom of the Task tab where they're easy to miss. -->
+<div class="modal" id="modal-info"><div class="card">
+  <p id="info-msg" style="font-size:17px"></p>
+  <button class="btn" id="btn-info-ok">OK</button>
+</div></div>
+
 <script>
 "use strict";
 /* ================= UTILITIES ================= */
@@ -908,12 +916,22 @@ const BOMB_IMG="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPm
    without ads for a thinking human; the bigger lever for ad views is
    the raised ad caps, not a wall. */
 function levelConfig(n){
-  const moves = n <= 4 ? 30 : Math.max(24, 30 - Math.floor((n - 5) / 8));
+  // Seeded ±2 jitter: moves vary level to level, but the same level
+  // always plays the same (fair, and the simulator can measure it).
+  const jitter = (((n * 2654435761) >>> 0) % 5) - 2; // -2..+2
+  const moves = n <= 4 ? 30 : Math.max(15, 24 - Math.floor((n - 5) / 3) + jitter);
   const types = 6;
   const mult  = 1;
   const ppm   = n <= 4 ? 40 + 2 * (n - 1)
-                       : Math.min(120, 70 + 7 * Math.sqrt(n - 5));
-  const target = Math.round((ppm * moves) / 50) * 50;
+                       : Math.min(135, 75 + 9 * Math.sqrt(n - 5));
+  // v30: the target assumes K extra moves on top of the moves you start
+  // with, so passing a level usually takes ad watches (+5 moves each)
+  // instead of none — the ad is the bridge, not a bonus. K ramps with
+  // the level: early levels stay passable without ads (ads help), and by
+  // the mid-teens it takes three to four ad watches to pass. Full K=12
+  // everywhere would wall new players at level 6 while ads are flaky.
+  const K = Math.min(12, 4 + Math.floor((n - 5) / 2));
+  const target = Math.round((ppm * (moves + K)) / 50) * 50;
   return { moves, types, mult, target };
 }
 /* ================= DAILY LOGIN STREAK (v23) =================
@@ -1305,7 +1323,7 @@ const DOWNLOAD_URL = "https://match3earn.netlify.app";
      3. EXTRA LIFE — out of lives: +1 life instead of waiting to refill.
    Anti-farm limits (per player, stored in the profile, synced with the
    rest of the game data when the account is verified):
-     MAX_PER_LEVEL 3 — extra-moves ads per level attempt (+15 moves max)
+     MAX_PER_LEVEL 4 — extra-moves ads per level attempt (+20 moves max)
      MAX_PER_DAY 20 — all rewarded ads per day, all kinds together
      MAX_BOOSTER_PER_DAY 3, MAX_LIFE_PER_DAY 3.
    v25: the two caps were RAISED (2→3, 10→20). The old caps were the
@@ -1334,7 +1352,7 @@ const DOWNLOAD_URL = "https://match3earn.netlify.app";
    or real AdMob IDs (native path). */
 const ADS = {
   EXTRA_MOVES: 5,
-  MAX_PER_LEVEL: 3,
+  MAX_PER_LEVEL: 4,
   MAX_PER_DAY: 20,
   MAX_BOOSTER_PER_DAY: 3,
   MAX_LIFE_PER_DAY: 3,
@@ -1501,11 +1519,12 @@ function adsRecord(kind) {
   saveCurrent(); saveGameData();
 }
 // Show an ad for a reward. onGranted() runs ONLY after the ad completes.
-// Returns true when the reward was granted. errEl (optional) shows why not.
+// Returns true when the reward was granted. errEl (optional) shows the
+// transient "Loading ad…" status; failures pop up instead (showInfoPopup).
 async function watchAdFor(kind, onGranted, errEl) {
   const chk = adsCan(kind);
   if (errEl) { errEl.className = "err"; errEl.textContent = ""; }
-  if (!chk.ok) { if (errEl) errEl.textContent = chk.why; return false; }
+  if (!chk.ok) { showInfoPopup(chk.why); return false; }
   if (errEl) errEl.textContent = "Loading ad…";
   const res = await AdProvider.showRewarded(kind);
   if (res === "granted") {
@@ -1514,9 +1533,10 @@ async function watchAdFor(kind, onGranted, errEl) {
     onGranted();
     return true;
   }
-  if (errEl) errEl.textContent = res === "not-granted"
+  if (errEl) errEl.textContent = "";
+  showInfoPopup(res === "not-granted"
     ? "Ad didn't finish — no reward this time."
-    : "Ads aren't available right now — check your connection and try again.";
+    : "Ads aren't available right now — check your connection and try again.");
   return false;
 }
 function grantFreeBooster(kind) {
@@ -2185,7 +2205,15 @@ function syncHome(){
   const pc = $("piggy-coins"); if (pc) pc.textContent = d.coins;
   const pb = $("piggy-badge");
   if (pb){ const ready = d.lastDaily !== todayStr(); pb.textContent = ready ? "Full" : "Done"; pb.style.background = ready ? "#ff4fd8" : "#999"; }
+  // Daily Claim button shows its claimed state too (was: always said
+  // "Claim", so a claimed bonus looked like it never worked).
+  const btnD = $("btn-daily");
+  if (btnD){ const ready = d.lastDaily !== todayStr(); btnD.textContent = ready ? "Claim" : "Claimed ✓"; btnD.disabled = !ready; }
   const cfg = levelConfig(d.maxUnlocked);
+  // v30: the target grows with the login-streak multiplier (same scaling
+  // as startLevel), so the number shown here matches the one the level
+  // actually needs.
+  cfg.target = Math.round(cfg.target * loginMult() / 50) * 50;
   const bb=$("bonus-badge"), btnB=$("btn-bonus");
   if(bb && btnB){ const ready=d.lastBonus!==todayStr(); bb.textContent=ready?"Ready!":"Done ✓"; btnB.disabled=!ready; }
   const bbT=$("bonus-badge-task"), btnBT=$("btn-bonus-task");
@@ -2211,6 +2239,15 @@ function banner(msg, ms){
    go to both message lines, so the player always sees them. */
 function showPlayerMsg(text){
   ["home-msg","task-msg"].forEach(id => { const el = $(id); if (el) el.textContent = text; });
+}
+/* Info popups (v30): "you can't do that" messages — limit reached,
+   already claimed, lives full — pop up in the middle of the screen
+   with an OK button, instead of sitting as small red text at the
+   bottom of the Task tab. Good-news toasts ("+20 coins!", "Free
+   hammer added!") still use the footer line. */
+function showInfoPopup(text){
+  const el = $("info-msg"); if (el) el.textContent = text;
+  openModal("modal-info");
 }
 
 /* ================= BOARD ENGINE ================= */
@@ -2508,10 +2545,14 @@ function loseLifeOnce(){
 }
 function startLevel(n){
   const d=data(); refreshLives();
-  if(d.lives<=0){ showPlayerMsg("Out of lives! Wait for a refill or buy one in the shop."); showScreen("screen-home"); syncHome(); return; }
+  if(d.lives<=0){ showInfoPopup("Out of lives! Wait for a refill or buy one in the shop."); showScreen("screen-home"); syncHome(); return; }
   if(d.boosters.magic==null) d.boosters.magic=1;
   stopBonusTimer(); G.bonus=false; G.gen=(G.gen||0)+1; G.lifeLost=false; G.adsMovesUsed=0;
   G.level=n; G.cfg=levelConfig(n); G.cfg.mult=loginMult(); G.score=0; G.moves=G.cfg.moves;
+  // v30: the target grows with the login-streak multiplier, so a daily
+  // player's multiplied points can't make the level easy — the streak
+  // still gives bigger scores, but the difficulty stays as tuned.
+  G.cfg.target = Math.round(G.cfg.target * G.cfg.mult / 50) * 50;
   $("g-moves-pill").innerHTML='👣 <span id="g-moves">'+G.moves+'</span> moves';
   G.selected=null; G.busy=false; G.over=false; G.hammerMode=false; G.earned=0; G.lastSwap=null;
   G.board=newBoard(G.cfg.types);
@@ -2525,8 +2566,8 @@ function stopBonusTimer(){ if(G.bonusTimer){ clearInterval(G.bonusTimer); G.bonu
 function fmtTime(s){ return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
 function startBonus(){
   const d=data(); refreshLives();
-  if(d.lives<=0){ showPlayerMsg("Out of lives! Wait for a refill or buy one in the shop."); showScreen("screen-home"); syncHome(); return; }
-  if(d.lastBonus===todayStr()){ showPlayerMsg("Bonus Level already played today — come back tomorrow!"); syncHome(); return; }
+  if(d.lives<=0){ showInfoPopup("Out of lives! Wait for a refill or buy one in the shop."); showScreen("screen-home"); syncHome(); return; }
+  if(d.lastBonus===todayStr()){ showInfoPopup("Bonus Level already played today — come back tomorrow!"); syncHome(); return; }
   d.lastBonus=todayStr(); saveCurrent();
   stopBonusTimer(); G.bonus=true; G.gen=(G.gen||0)+1; G.lifeLost=false; G.adsMovesUsed=0;
   G.level=d.maxUnlocked; G.cfg=levelConfig(G.level); G.cfg.mult=loginMult();
@@ -2938,7 +2979,7 @@ function tickChallengeCountdown(){
 }
 function doDaily(){
   if(claimDaily()){ Sound.coin(); showPlayerMsg("🎁 Daily bonus claimed: +20 coins!"); }
-  else showPlayerMsg("Daily bonus already claimed today — come back tomorrow!");
+  else showInfoPopup("Daily bonus already claimed today — come back tomorrow!");
   syncHome();
 }
 /* ================= SETTINGS (v23) ================= */
@@ -3525,7 +3566,7 @@ function init(){
   $("btn-life-ad").addEventListener("click", async ()=>{
     const btn=$("btn-life-ad"); btn.disabled=true;
     if (data().lives >= LIFE_MAX) {
-      showPlayerMsg("Lives are already full! ❤️");
+      showInfoPopup("Lives are already full! ❤️");
       btn.disabled=false; return;
     }
     await watchAdFor("life", grantExtraLife, $("task-msg"));
@@ -3533,6 +3574,7 @@ function init(){
     syncHome();
   });
   $("btn-shop-close").addEventListener("click", ()=>{ Sound.click(); closeModal("modal-shop"); syncHome(); });
+  $("btn-info-ok").addEventListener("click", ()=>{ Sound.click(); closeModal("modal-info"); });
   document.querySelectorAll("[data-buy]").forEach(btn=>btn.addEventListener("click", ()=>{
     const d=data(); const kind=btn.dataset.buy; const err=$("shop-err");
     err.className="err"; err.textContent="";
