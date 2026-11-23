@@ -420,17 +420,6 @@
   .profile-stat { display:flex; justify-content:space-between; align-items:center; gap:10px;
     padding:9px 2px; border-bottom:1px solid #eee; font-size:15px; }
   .profile-stat:last-child { border-bottom:none; }
-  /* ---- v13: ad slots (Task tab) ---- */
-  .adslots { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; width:100%; margin-top:8px; }
-  .adslot { background:linear-gradient(180deg,#43e97b,#38f9d7); border:3px solid #fff; border-radius:14px;
-    padding:10px 2px; cursor:pointer; font-weight:800; color:#063; box-shadow:0 3px 8px rgba(0,0,0,.2);
-    display:flex; flex-direction:column; align-items:center; gap:2px; }
-  .adslot:active { transform:scale(.95); }
-  .adslot .adslot-label { font-size:14px; }
-  .adslot .adslot-sub { font-size:12px; font-weight:700; }
-  .adslot.cooling { background:linear-gradient(180deg,#ddd,#bbb); color:#555; }
-  .adslot.off { background:#e0e0e0; color:#999; }
-  .adslot:disabled { cursor:not-allowed; opacity:.85; }
 </style>
 </head>
 <body class="booting">
@@ -570,6 +559,15 @@
     </div>
   </div>
   <div class="card">
+    <b>🪙 Earn coins — watch ads</b>
+    <p class="muted" style="margin:6px 0">Watch a short ad, get <b>+15 coins</b>. Shares your daily ad limit with boosters, lives and extra moves — 100 ads a day in total.</p>
+    <div class="task-item">
+      <div><b>📺 Watch an ad</b><span id="coinad-sub">100 ads left today</span></div>
+      <button class="btn small green" id="btn-coin-ad">Watch ad — +15 🪙</button>
+    </div>
+    <div class="okmsg" id="coinad-msg"></div>
+  </div>
+  <div class="card">
     <b>🆓 Free — watch an ad</b>
     <p class="muted" style="margin:6px 0">Pick a booster, watch a short ad, get it free. Max 3 free boosters a day.</p>
     <div class="task-item">
@@ -592,19 +590,6 @@
       <div><b>🛍 Rewards Shop</b><span>Buy boosters and lives with your coins</span></div>
       <button class="btn small" id="btn-shop-task">🛒 Open Shop</button>
     </div>
-  </div>
-  <div class="card">
-    <b>📺 Watch ads — earn coins</b>
-    <p class="muted" style="margin:6px 0">Watch an ad, get <b>+15 coins</b>. Each slot refills 10 minutes after you watch it.</p>
-    <div class="adslots" id="ad-slots">
-      <button class="adslot" id="ad-slot-0"><span class="adslot-label">📺 Ad 1</span><span class="adslot-sub">+15 🪙</span></button>
-      <button class="adslot" id="ad-slot-1"><span class="adslot-label">📺 Ad 2</span><span class="adslot-sub">+15 🪙</span></button>
-      <button class="adslot" id="ad-slot-2"><span class="adslot-label">📺 Ad 3</span><span class="adslot-sub">+15 🪙</span></button>
-      <button class="adslot" id="ad-slot-3"><span class="adslot-label">📺 Ad 4</span><span class="adslot-sub">+15 🪙</span></button>
-      <button class="adslot" id="ad-slot-4"><span class="adslot-label">📺 Ad 5</span><span class="adslot-sub">+15 🪙</span></button>
-    </div>
-    <div class="muted" id="adslots-note" style="margin-top:8px"></div>
-    <div class="okmsg" id="adslots-msg"></div>
   </div>
   <div class="okmsg" id="task-msg"></div>
 </div>
@@ -894,8 +879,8 @@ const BOMB_IMG="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPm
      point: a stuck player watches a rewarded ad for +5 moves, a free
      booster, or an extra life. Ads stay OPTIONAL: nothing in the game
      requires watching one, and the ad caps below were RAISED (not
-     lowered) so a stuck player CAN watch more (3 extra-moves ads per
-     level, 20 rewarded ads per day).
+     lowered) so a stuck player CAN watch more (4 extra-moves ads per
+     level, 100 rewarded ads per day).
    - COLOURS STAY AT 6 FOREVER. Measured with the greedy bot (26 moves,
      mult 1): mean total score is ~2,340 with 6 colours, ~4,440 with 5,
      ~11,680 with 4. Dropping to 5 colours took the L300 bot win rate
@@ -1162,7 +1147,7 @@ function defaultData(){
   return { coins:100, lives:LIFE_MAX, livesUpdatedAt:Date.now(), maxUnlocked:1,
     best:{}, stars:{}, totalBest:0, gamesPlayed:0, gamesWon:0,
     boosters:{ hammer:1, shuffle:1, magic:1 }, lastDaily:"", lastBonus:"", totalCleared:0,
-    adSlots:[0,0,0,0,0], adCapDay:"",
+    adCapDay:"",
     // Daily challenge (v22) — replaces the v21 weekly tournament.
     challenge:{ joinedAt:0, stars:0, lastResult:null },
     // Test withdrawal (v22): one-time $0.10 payout to confirm the wallet.
@@ -1317,14 +1302,15 @@ const REFERRAL_LEVEL = 10;
 const DOWNLOAD_URL = "https://match3earn.netlify.app";
 
 /* ================= REWARDED ADS =================
-   Three rewards, all behind ONE provider call (AdProvider.showRewarded):
+   Four rewards, all behind ONE provider call (AdProvider.showRewarded):
      1. EXTRA MOVES — out of moves: +5 moves, keep playing the same level.
      2. FREE BOOSTER — pick Hammer / Shuffle / Magic, get one free.
      3. EXTRA LIFE — out of lives: +1 life instead of waiting to refill.
+     4. EARN COINS — Task tab: +15 coins per ad, shares the 100/day cap.
    Anti-farm limits (per player, stored in the profile, synced with the
    rest of the game data when the account is verified):
      MAX_PER_LEVEL 4 — extra-moves ads per level attempt (+20 moves max)
-     MAX_PER_DAY 20 — all rewarded ads per day, all kinds together
+     MAX_PER_DAY 100 — all rewarded ads per day, all kinds together
      MAX_BOOSTER_PER_DAY 3, MAX_LIFE_PER_DAY 3.
    v25: the two caps were RAISED (2→3, 10→20). The old caps were the
    ceiling on ad views — a stuck player hit the limit and had no more
@@ -1353,7 +1339,7 @@ const DOWNLOAD_URL = "https://match3earn.netlify.app";
 const ADS = {
   EXTRA_MOVES: 5,
   MAX_PER_LEVEL: 4,
-  MAX_PER_DAY: 20,
+  MAX_PER_DAY: 100,
   MAX_BOOSTER_PER_DAY: 3,
   MAX_LIFE_PER_DAY: 3,
   TEST_AD_SECONDS: 5
@@ -1566,40 +1552,13 @@ function refreshLoseAdButton() {
   btn.textContent = chk.ok ? "📺 Watch an ad for +5 moves" : "📺 +5 moves — limit reached";
 }
 
-/* ================= AD SLOTS (Task tab — 5 slots, +15 coins each) ============
-   Each slot is its own 10-minute timer: watch an ad, get +15 coins, and
-   that slot refills 10 minutes later. The coins go through the SERVER
-   credit_coins call (type 'earn') — the same call a level win uses — so
-   they count toward the 4,000/day cap and can never be faked by editing
-   local state. Local coins are NEVER incremented here: the server's
-   returned balance becomes the local balance (online), or the credit is
-   queued and lands on the next sync (offline). If the daily cap is hit,
-   credit_coins reports capped=true and the slots grey out until
-   tomorrow. Slot timestamps live in the profile and sync with the rest
-   of the game data, so a cooldown survives an app restart. Slot ads do
-   NOT touch the shared 10/day rewarded-ad counter (adsCan/adsRecord) —
-   the cooldown and the coin cap are their limits. */
-const ADS_SLOT_COINS = 15;
-const ADS_SLOT_COUNT = 5;
-const ADS_SLOT_COOLDOWN_MS = 10 * 60 * 1000;
+/* ================= DAILY COIN CAP (Task tab) =================
+   The coin-ad card greys out when today's server-side 'earn' total
+   hits the 4,000/day cap. */
 let adCapReached = false; // today's 'earn' sum hit the daily cap (a server-side fact)
-function ensureAdSlots(){
-  const d = data();
-  if (!Array.isArray(d.adSlots) || d.adSlots.length !== ADS_SLOT_COUNT) {
-    d.adSlots = [0, 0, 0, 0, 0];
-  }
-  if (typeof d.adCapDay !== "string") d.adCapDay = "";
-  return d.adSlots;
-}
-function slotReadyAt(i){ return ensureAdSlots()[i] + ADS_SLOT_COOLDOWN_MS; }
-function slotReady(i){ return Date.now() >= slotReadyAt(i); }
 function adCapHitToday(){ return adCapReached || data().adCapDay === todayStr(); }
-function fmtCountdown(ms){
-  const s = Math.max(0, Math.ceil(ms / 1000));
-  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
-}
 /* Proactive cap check: sum today's 'earn' ledger rows (read-own RLS).
-   Runs when the Task tab opens and after each slot credit. If the query
+   Runs when the Task tab opens and after each coin-ad credit. If the query
    fails (offline), ignore it — the credit response is the backstop. */
 async function refreshAdCapStatus(){
   if (!SB.online || !SB.userId) return;
@@ -1616,77 +1575,66 @@ async function refreshAdCapStatus(){
     } else {
       adCapReached = false;
     }
-    renderAdSlots();
-  } catch (e) { /* offline — leave the slots as they are */ }
+    renderCoinAdCard();
+  } catch (e) { /* offline — leave the card as it is */ }
 }
-function renderAdSlots(){
-  const wrap = $("ad-slots");
-  if (!wrap || !current) return;
-  const verified = !!(SB.configured && current.verified);
+/* ================= EARN COINS — WATCH ADS (Task tab) =================
+   One button: watch a short rewarded ad, get +15 coins. This shares
+   the ONE daily rewarded-ad counter (ADS.MAX_PER_DAY = 100, all
+   kinds together — extra moves, free boosters, extra lives and these
+   coin ads), so a player can never watch more than 100 rewarded ads a
+   day in total. The coins go through the SERVER credit_coins call
+   (type 'earn'), so they count toward
+   the 4,000/day cap and can never be faked by editing local state.
+   Local coins are NEVER incremented here: the server's returned
+   balance becomes the local balance (online), or the credit is queued
+   and lands on the next sync (offline). */
+const ADS_COIN_REWARD = 15;
+let coinAdBusy = false; // an ad is in flight — keep the button disabled
+function coinAdsLeft(){ return Math.max(0, ADS.MAX_PER_DAY - adsToday().total); }
+function renderCoinAdCard(){
+  const btn = $("btn-coin-ad"), sub = $("coinad-sub");
+  if (!btn) return;
+  const verified = !!(SB.configured && current && current.verified);
   const cap = adCapHitToday();
-  for (let i = 0; i < ADS_SLOT_COUNT; i++) {
-    const btn = $("ad-slot-" + i);
-    if (!btn) continue;
-    const ready = slotReady(i);
-    const label = btn.querySelector(".adslot-label");
-    const sub = btn.querySelector(".adslot-sub");
-    if (!verified) {
-      btn.disabled = true; btn.classList.add("off"); btn.classList.remove("cooling");
-      if (label) label.textContent = "🔒 Ad " + (i + 1);
-      if (sub) sub.textContent = "Verify email";
-    } else if (cap) {
-      btn.disabled = true; btn.classList.add("off"); btn.classList.remove("cooling");
-      if (label) label.textContent = "🚫 Ad " + (i + 1);
-      if (sub) sub.textContent = "Limit reached";
-    } else if (!ready) {
-      btn.disabled = true; btn.classList.add("cooling"); btn.classList.remove("off");
-      if (label) label.textContent = "⏳ Ad " + (i + 1);
-      if (sub) sub.textContent = fmtCountdown(slotReadyAt(i) - Date.now());
-    } else {
-      btn.disabled = false; btn.classList.remove("off", "cooling");
-      if (label) label.textContent = "📺 Ad " + (i + 1);
-      if (sub) sub.textContent = "+15 🪙";
-    }
-  }
-  const note = $("adslots-note");
-  if (note) {
-    note.textContent = !verified
-      ? "Verify your email to earn coins from ads."
-      : cap
-      ? "Daily coin limit reached — slots refill tomorrow."
-      : "Each slot refills 10 minutes after you watch it.";
+  const left = coinAdsLeft();
+  if (coinAdBusy) { btn.disabled = true; return; }
+  if (!verified) {
+    btn.disabled = true;
+    if (sub) sub.textContent = "Verify your email to earn coins";
+  } else if (cap) {
+    btn.disabled = true;
+    if (sub) sub.textContent = "Daily coin limit reached";
+  } else if (left <= 0) {
+    btn.disabled = true;
+    if (sub) sub.textContent = "No more ads today — come back tomorrow";
+  } else {
+    btn.disabled = false;
+    if (sub) sub.textContent = left + (left === 1 ? " ad" : " ads") + " left today";
   }
 }
-async function watchAdSlot(i){
-  const msg = $("adslots-msg");
+async function watchCoinAd(){
+  const msg = $("coinad-msg");
   if (!(SB.configured && current && current.verified)) {
     if (msg) { msg.className = "err"; msg.textContent = "Verify your email to earn coins from ads."; }
-    return false;
-  }
-  const slots = ensureAdSlots();
-  if (!slotReady(i)) {
-    if (msg) { msg.className = "err"; msg.textContent = "That slot is still refilling — wait for the countdown."; }
     return false;
   }
   if (adCapHitToday()) {
     if (msg) { msg.className = "err"; msg.textContent = "Daily coin limit reached — come back tomorrow."; }
     return false;
   }
-  if (msg) { msg.className = "err"; msg.textContent = "Loading ad…"; }
-  const res = await AdProvider.showRewarded("adslot");
-  if (res !== "granted") {
-    if (msg) msg.textContent = res === "not-granted"
-      ? "Ad didn't finish — no reward this time."
-      : "Ads aren't available right now — check your connection and try again.";
-    return false;
-  }
-  // The ad was watched: the slot is used now, whatever the server pays.
-  slots[i] = Date.now(); saveCurrent(); saveGameData();
-  renderAdSlots();
+  // The ad itself: shares the 100/day counter (adsCan/adsRecord) and
+  // only pays out after the ad completes (watchAdFor).
+  const ok = await watchAdFor("coins", ()=>{ creditCoinAd(); }, msg);
+  renderCoinAdCard();
+  return ok;
+}
+async function creditCoinAd(){
+  const msg = $("coinad-msg");
   let credited = 0, queued = false;
   try {
     if (SB.online) {
-      const r = await sbRpc("credit_coins", { p_user: SB.userId, p_coins: ADS_SLOT_COINS, p_ref: "ad:slot:" + i });
+      const r = await sbRpc("credit_coins", { p_user: SB.userId, p_coins: ADS_COIN_REWARD, p_ref: "ad:coins:" + Date.now() });
       if (r && typeof r.balance === "number") { data().coins = r.balance; saveCurrent(); }
       credited = (r && typeof r.credited === "number") ? r.credited : 0;
       if (r && r.capped) {
@@ -1694,19 +1642,19 @@ async function watchAdSlot(i){
         data().adCapDay = todayStr(); saveCurrent(); saveGameData();
       }
     } else {
-      // Offline: queue the server credit (same as wins/daily) — the coins
+      // Offline: queue the server credit (same as wins) — the coins
       // land on the next sync. Nothing is added locally here.
-      queuePending({ kind: "credit", coins: ADS_SLOT_COINS, ref: "ad:slot:" + i });
-      credited = ADS_SLOT_COINS; queued = true;
+      queuePending({ kind: "credit", coins: ADS_COIN_REWARD, ref: "ad:coins:" + Date.now() });
+      credited = ADS_COIN_REWARD; queued = true;
     }
   } catch (e) {
     // The server refused the credit — the ad was watched but nothing can
     // be paid. Say so plainly instead of pretending.
     if (msg) msg.textContent = "Ad watched, but the coins couldn't be credited — check your connection and try again.";
-    syncHome(); renderAdSlots();
-    return false;
+    syncHome(); renderCoinAdCard();
+    return;
   }
-  syncHome(); renderAdSlots();
+  syncHome(); renderCoinAdCard();
   if (msg) {
     msg.className = "okmsg";
     msg.textContent = queued
@@ -1715,7 +1663,6 @@ async function watchAdSlot(i){
       ? "+" + credited + " coins! 🪙"
       : "Daily coin limit reached — no coins this time.";
   }
-  return true;
 }
 const SB_CFG = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url &&
   window.SUPABASE_CONFIG.url.indexOf("YOUR-PROJECT") === -1 &&
@@ -2007,7 +1954,7 @@ function gameDataForServer(){
     gamesPlayed: d.gamesPlayed, gamesWon: d.gamesWon, boosters: d.boosters, lives: d.lives,
     livesUpdatedAt: d.livesUpdatedAt, lastDaily: d.lastDaily, lastBonus: d.lastBonus,
     totalCleared: d.totalCleared, ads: d.ads || { day: "", total: 0, booster: 0, life: 0 },
-    adSlots: ensureAdSlots().slice(), adCapDay: (d.adCapDay || ""),
+    adCapDay: (d.adCapDay || ""),
     challenge: ensureChallenge(), walletConfirmed: !!d.walletConfirmed, testRequested: !!d.testRequested,
     loginStreak: (d.loginStreak || 0), lastLoginDay: (d.lastLoginDay || ""),
     avatarPic: (d.avatarPic || ""), displayName: (current && current.displayName) || (d.displayName || "") };
@@ -2033,10 +1980,6 @@ function applyServerGameData(gd){
   if (gd.ads && typeof gd.ads === "object") {
     const a = gd.ads;
     d.ads = { day: typeof a.day === "string" ? a.day : "", total: num(a.total, 0), booster: num(a.booster, 0), life: num(a.life, 0) };
-  }
-  if (Array.isArray(gd.adSlots)) {
-    d.adSlots = gd.adSlots.slice(0, ADS_SLOT_COUNT).map(v => num(v, 0));
-    while (d.adSlots.length < ADS_SLOT_COUNT) d.adSlots.push(0);
   }
   if (typeof gd.adCapDay === "string") d.adCapDay = gd.adCapDay;
   if (gd.challenge && typeof gd.challenge === "object") {
@@ -2229,7 +2172,7 @@ function syncHome(){
   const pusd=$("profile-usd"); if(pusd) pusd.textContent = (d.coins / CASHOUT.RATE_COINS_PER_USD).toFixed(2);
   const pbest=$("profile-best"); if(pbest) pbest.textContent = d.totalBest;
   const pwon=$("profile-won"); if(pwon) pwon.textContent = d.gamesWon;
-  renderAdSlots();
+  renderCoinAdCard();
 }
 function banner(msg, ms){
   $("g-banner").textContent = msg;
@@ -2243,7 +2186,7 @@ function showPlayerMsg(text){
 /* Info popups (v30): "you can't do that" messages — limit reached,
    already claimed, lives full — pop up in the middle of the screen
    with an OK button, instead of sitting as small red text at the
-   bottom of the Task tab. Good-news toasts ("+20 coins!", "Free
+   bottom of the Task tab. Good-news toasts ("+15 coins!", "Free
    hammer added!") still use the footer line. */
 function showInfoPopup(text){
   const el = $("info-msg"); if (el) el.textContent = text;
@@ -3554,10 +3497,13 @@ function init(){
       btn.disabled=false;
     });
   });
-  // Task-tab ad slots (5 slots, +15 coins each, 10-minute refill).
-  for (let i = 0; i < ADS_SLOT_COUNT; i++) {
-    $("ad-slot-" + i).addEventListener("click", ()=>{ Sound.click(); watchAdSlot(i); });
-  }
+  // Earn-coins ad (Task tab): one ad = +15 coins, shares the 100/day cap.
+  $("btn-coin-ad").addEventListener("click", async ()=>{
+    const btn = $("btn-coin-ad"); btn.disabled = true; coinAdBusy = true; renderCoinAdCard();
+    Sound.click();
+    await watchCoinAd();
+    coinAdBusy = false; btn.disabled = false; renderCoinAdCard();
+  });
   $("btn-free-life").addEventListener("click", async ()=>{
     const btn=$("btn-free-life"); btn.disabled=true;
     await watchAdFor("life", grantExtraLife, $("shop-err"));
@@ -3615,8 +3561,8 @@ function init(){
     }
   });
   setInterval(()=>{ if(current && document.body.classList.contains("has-nav")) syncHome(); }, 30000);
-  // Ad-slot countdowns tick every second while the Task tab is open.
-  setInterval(()=>{ if($("screen-task").classList.contains("active")) renderAdSlots(); }, 1000);
+  // The coin-ad card refreshes every second while the Task tab is open.
+  setInterval(()=>{ if($("screen-task").classList.contains("active")) { renderCoinAdCard(); } }, 1000);
   // v22 fix: the Daily Challenge countdown in the big pink pill ticks
   // every second while the Rank tab is open.
   setInterval(()=>{ tickChallengeCountdown(); }, 1000);
